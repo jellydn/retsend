@@ -73,6 +73,19 @@ Same device and same bundled SDL2 as the OnionOS package; what differs is the
 launcher, and that the app closes its own transfers on MENU rather than being
 killed from outside. What ships inside it: [allium/README.md](allium/README.md).
 
+## Install (Miyoo Mini Plus / Mini Flip, spruceOS)
+
+Grab `retsend-spruceos.zip` from
+[Releases](https://github.com/mxmgorin/retsend/releases) and unzip it at the root
+of the SD card, so the app lands in `App/Retsend/`. It shows up under Apps, and
+**MENU quits** it.
+
+Turn wifi on in spruce's settings first — it brings the radio up at boot and only
+when that setting is on, so an empty radar is otherwise hard to read. The same
+device and the same bundled SDL2 again, which matters more here: spruce ships a
+Miyoo SDL2 of its own whose drivers answer to other names. What ships inside it:
+[spruce/README.md](spruce/README.md).
+
 ## Install (Android)
 
 Grab `retsend-android-arm64.apk` from

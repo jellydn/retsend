@@ -223,6 +223,57 @@ jobs:
             retsend-onionos.zip
             retsend-onionos.zip.sha256
 
+  spruce:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: retsend-linux-armhf
+          path: bin
+
+      - name: Assemble the card layout
+        run: |
+          set -eux
+          pkg=spruce-dist
+          app=$pkg/App/Retsend
+          rm -rf "$pkg"
+          mkdir -p "$app"
+          # spruce reads App/ as OnionOS does; what differs is the launcher and a
+          # config.json carrying the device list and the Simple Mode flag. The
+          # icon and the bundled SDL2 come from the one tree rather than a second
+          # copy that would drift from it.
+          cp spruce/App/Retsend/config.json spruce/App/Retsend/launch.sh "$app/"
+          cp spruce/README.md "$app/"
+          cp onionos/App/Retsend/icon.png "$app/"
+          cp -r onionos/App/Retsend/lib "$app/"
+          install -m 755 bin/retsend "$app/retsend"
+          chmod 755 "$app/launch.sh"
+          ls -laR "$pkg"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: retsend-spruceos
+          path: spruce-dist
+
+      - name: Zip for release
+        if: github.event_name == 'release'
+        run: |
+          set -eux
+          (cd spruce-dist && zip -r ../retsend-spruceos.zip .)
+          sha256sum retsend-spruceos.zip > retsend-spruceos.zip.sha256
+
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            retsend-spruceos.zip
+            retsend-spruceos.zip.sha256
+
   allium:
     needs: build
     runs-on: ubuntu-22.04
@@ -246,6 +297,10 @@ jobs:
           # icon and the bundled SDL2 come from the one tree rather than a second
           # copy that would drift from it.
           cp allium/Apps/Retsend.pak/config.json allium/Apps/Retsend.pak/launch.sh "$app/"
+          # Carried, not installed: copied into Roms/PORTS it puts the app in the
+          # Games tab, handing over to this one install.
+          cp -r allium/Apps/Retsend.pak/ports "$app/"
+          chmod 755 "$app/ports/Retsend.port/launch.sh"
           cp allium/README.md "$app/"
           cp onionos/App/Retsend/icon.png "$app/"
           cp -r onionos/App/Retsend/lib "$app/"
