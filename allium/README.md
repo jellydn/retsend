@@ -39,6 +39,16 @@ MENU is Allium's key everywhere else on the device, and it does nothing for an
 app — its in-game menu is RetroArch's — so here it is the way out. Held with
 another button it stays Allium's: MENU+↑/↓ for brightness, MENU+←/→ for volume.
 
+## In the Games tab as well
+
+Allium's **Ports Collection** console runs anything under `Roms/PORTS` whose name
+ends `.port`, by entering the folder and running its `launch.sh`.
+`ports/Retsend.port/` in this package is that folder — copy it to
+`Roms/PORTS/Retsend.port/` and the app appears among the games too. It holds one
+line, which hands over to the install under `Apps/`, so there is one copy of the
+app and one identity on the network. Box art, if you want it:
+`Roms/PORTS/Imgs/Retsend.png`.
+
 ## Notes for this device
 
 Allium keeps no kill helper of the kind OnionOS has, so the app answers MENU
