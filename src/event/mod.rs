@@ -4,6 +4,7 @@
 
 mod gamepad;
 mod keyboard;
+pub mod quit;
 pub mod user;
 
 use crate::app::AppCommand;

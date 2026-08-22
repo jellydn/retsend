@@ -10,21 +10,25 @@ pub enum Keymap {
     #[default]
     Desktop,
     /// Its SDL2 offers the pad as a joystick with no gamepad mapping, and sends
-    /// keys instead. See [`miyoo_mini`].
-    MiyooMini,
+    /// keys instead. See [`miyoo_mini`]. `menu_quits` is the launcher saying it
+    /// keeps no kill helper of its own, which leaves MENU to the app.
+    MiyooMini { menu_quits: bool },
 }
 
 impl Keymap {
     /// `RETSEND_KEYMAP=miyoo|desktop` wins; else the driver name gives it away.
     pub fn detect(video_driver: &str) -> Self {
+        let miyoo = Self::MiyooMini {
+            menu_quits: std::env::var_os("RETSEND_MENU_QUIT").is_some_and(|v| v != "0"),
+        };
         match std::env::var("RETSEND_KEYMAP").as_deref() {
-            Ok("miyoo") => Self::MiyooMini,
+            Ok("miyoo") => miyoo,
             Ok("desktop") => Self::Desktop,
             Ok(other) => {
                 log::warn!("unknown RETSEND_KEYMAP `{other}`; using the desktop layout");
                 Self::Desktop
             }
-            Err(_) if video_driver == "mmiyoo" => Self::MiyooMini,
+            Err(_) if video_driver == "mmiyoo" => miyoo,
             Err(_) => Self::Desktop,
         }
     }
@@ -46,7 +50,7 @@ pub fn on_key_down(keymap: Keymap, kc: Keycode, repeat: bool, commands: &mut Vec
                 Some(cmd) => cmd,
                 None => return,
             },
-            Keymap::MiyooMini => match miyoo_mini(kc) {
+            Keymap::MiyooMini { menu_quits } => match miyoo_mini(kc, menu_quits) {
                 Some(cmd) => cmd,
                 None => return,
             },
@@ -70,10 +74,13 @@ fn desktop(kc: Keycode) -> Option<AppCommand> {
     })
 }
 
-/// The pad, as keys. MENU is absent: the launcher gives it to the system's own
-/// kill helper, as every app there does.
-fn miyoo_mini(kc: Keycode) -> Option<AppCommand> {
+/// The pad, as keys. MENU belongs to the launcher — OnionOS gives it to the
+/// system's own kill helper, as every app there does — and is the app's to
+/// answer only where the launcher keeps none (Allium).
+fn miyoo_mini(kc: Keycode, menu_quits: bool) -> Option<AppCommand> {
     Some(match kc {
+        // MENU, where the launcher has handed it over.
+        Keycode::Escape if menu_quits => AppCommand::Shutdown,
         Keycode::Space => AppCommand::Confirm,    // A
         Keycode::LCtrl => AppCommand::Back,       // B
         Keycode::LShift => AppCommand::Alt,       // X
@@ -116,19 +123,42 @@ mod tests {
 
     #[test]
     fn the_miyoo_pad_maps_a_to_confirm_and_start_to_start() {
+        let miyoo = Keymap::MiyooMini { menu_quits: false };
         let mut commands = Vec::new();
-        on_key_down(Keymap::MiyooMini, Keycode::Space, false, &mut commands);
-        on_key_down(Keymap::MiyooMini, Keycode::LCtrl, false, &mut commands);
-        on_key_down(Keymap::MiyooMini, Keycode::Return, false, &mut commands);
+        on_key_down(miyoo, Keycode::Space, false, &mut commands);
+        on_key_down(miyoo, Keycode::LCtrl, false, &mut commands);
+        on_key_down(miyoo, Keycode::Return, false, &mut commands);
         assert_eq!(
             commands,
             vec![AppCommand::Confirm, AppCommand::Back, AppCommand::Start]
         );
     }
 
+    /// MENU is the launcher's key until a launcher says otherwise, and it is
+    /// never the desktop's Escape, which backs out of a screen.
+    #[test]
+    fn menu_quits_only_where_the_launcher_hands_it_over() {
+        let mut commands = Vec::new();
+        on_key_down(
+            Keymap::MiyooMini { menu_quits: false },
+            Keycode::Escape,
+            false,
+            &mut commands,
+        );
+        assert!(commands.is_empty());
+
+        on_key_down(
+            Keymap::MiyooMini { menu_quits: true },
+            Keycode::Escape,
+            false,
+            &mut commands,
+        );
+        assert_eq!(commands, vec![AppCommand::Shutdown]);
+    }
+
     #[test]
     fn arrows_navigate_under_either_layout() {
-        for keymap in [Keymap::Desktop, Keymap::MiyooMini] {
+        for keymap in [Keymap::Desktop, Keymap::MiyooMini { menu_quits: true }] {
             let mut commands = Vec::new();
             on_key_down(keymap, Keycode::Up, false, &mut commands);
             assert_eq!(commands, vec![AppCommand::Nav(Direction::Up)]);

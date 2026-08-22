@@ -64,6 +64,9 @@ socket2 = { version = "0.6", features = ["all"] }
 # Random session ids / tokens / fingerprint; a hex helper in net::protocol is
 # all we need on top, so no uuid/rand.
 getrandom = "0.4"
+# `sigwait`, so the launcher's SIGTERM stops the net threads rather than killing
+# the process where it stands. Already in the tree under SDL.
+libc = "0.2"
 
 # Android: SDL loads our cdylib and calls the C `SDL_main` we export. There is no
 # stderr to mirror to a file, so `log` goes to logcat via android_logger.

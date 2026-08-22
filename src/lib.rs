@@ -41,6 +41,11 @@ pub fn run_app() {
         return;
     }
 
+    // After the headless branch, whose quit has no event loop to reach, and
+    // before SDL, whose subsystems bring threads of their own: the signal has to
+    // be blocked in every one of them for the waiter to take it.
+    event::quit::on_termination();
+
     // On a Wayland desktop SDL still often defaults to x11; align it to
     // Wayland. On the handheld (no WAYLAND_DISPLAY) this is skipped and SDL
     // falls back to its kmsdrm driver. An explicit SDL_VIDEODRIVER wins.
