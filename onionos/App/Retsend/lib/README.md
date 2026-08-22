@@ -68,13 +68,33 @@ json-c, from the same Ports-Collection bundle. `libSDL2`'s audio driver reads
 `/appconfigs/system.json` for the system volume; retsend opens no audio device,
 but the symbols are resolved regardless.
 
+## fallback/libGLESv2.so, fallback/libshmvar.so
+
+`libSDL2` names both in `DT_NEEDED` and calls into neither: it is configured
+`--disable-video-opengles`, and `nm -D` shows no `gl*` or `shmvar*` among its
+undefined symbols. An OnionOS card carries them, an Allium card does not, and on
+one the loader stops before `main`:
+
+    ./retsend: error while loading shared libraries: libGLESv2.so: cannot open
+    shared object file: No such file or directory
+
+So these are empty shared objects with the right `SONAME`, built here with
+`zig cc -shared -target arm-linux-gnueabihf.2.28` from a `.c` file holding one
+comment. They are ours, under this package's licence, and the launcher puts
+`lib/fallback` at the *end* of `LD_LIBRARY_PATH`: where the real libraries exist
+they are found first, and these fill the gap where they do not.
+
+    5822e549fae04bdf4ea2af7efb4f39f15c398066d3107fa576467b0d88947145  libGLESv2.so
+    b92c2058527c31757298112a563a44c987b48dc35c64ab2ba41ac9c5183057c9  libshmvar.so
+
 ## Not shipped
 
 `libSDL2_image-2.0.so.0` and `libSDL2_ttf-2.0.so.0` were in the previous bundle
 only because that build named them in `DT_NEEDED` for an overlay feature retsend
 never used. This one does not, so they are gone, and with them `libpng16`,
-`libz`, `libfreetype` and `libbz2`. Everything still needed — `libGLESv2` and the
-`libmi_*` SoC libraries — is already on the device.
+`libz`, `libfreetype` and `libbz2`. The `libmi_*` SoC libraries are the
+firmware's; `libGLESv2` is an OnionOS card's, and `fallback/` covers the cards
+without one.
 
     adfaba3ed88c5e5acd521384f047bc369f52578f01d0b6b39fc7591e94e93944  libEGL.so
     d0c8f1b8cffe367c283375a9475f974c551024c61f9b189f81da84ce7752ccff  libSDL2-2.0.so.0

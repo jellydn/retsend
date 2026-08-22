@@ -5,9 +5,9 @@ miyoodir=/mnt/SDCARD/miyoo
 gamedir=$(cd "$(dirname "$0")" && pwd)
 cd "$gamedir" || exit 1
 
-# Our SDL2 first, preloaded like every SDL2 port here; the device carries what it
-# links against (libGLESv2 and the libmi_* SoC libraries).
-export LD_LIBRARY_PATH="$gamedir/lib:$sysdir/lib/parasyte:$sysdir/lib:$miyoodir/lib:/lib:/config/lib:/customer/lib"
+# Our SDL2 first, preloaded like every SDL2 port here; the card and the firmware
+# carry what it links against. `lib/fallback` goes last, unused here.
+export LD_LIBRARY_PATH="$gamedir/lib:$sysdir/lib/parasyte:$sysdir/lib:$miyoodir/lib:/lib:/config/lib:/customer/lib:$gamedir/lib/fallback"
 export LD_PRELOAD="$gamedir/lib/libSDL2-2.0.so.0"
 export SDL_VIDEODRIVER=Mini
 export EGL_VIDEODRIVER=Mini
