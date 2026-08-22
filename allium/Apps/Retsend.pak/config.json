@@ -1,0 +1,6 @@
+{
+  "label": "Retsend",
+  "icon": "/mnt/SDCARD/Apps/Retsend.pak/icon.png",
+  "launch": "launch.sh",
+  "description": "Send and receive files over wifi (LocalSend)"
+}

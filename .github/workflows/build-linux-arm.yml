@@ -222,3 +222,54 @@ jobs:
           files: |
             retsend-onionos.zip
             retsend-onionos.zip.sha256
+
+  allium:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: retsend-linux-armhf
+          path: bin
+
+      - name: Assemble the card layout
+        run: |
+          set -eux
+          pkg=allium-dist
+          app=$pkg/Apps/Retsend.pak
+          rm -rf "$pkg"
+          mkdir -p "$app"
+          # The same device as the OnionOS package, a different launcher: Allium
+          # reads Apps/, and only a folder ending in .pak is an app to it. The
+          # icon and the bundled SDL2 come from the one tree rather than a second
+          # copy that would drift from it.
+          cp allium/Apps/Retsend.pak/config.json allium/Apps/Retsend.pak/launch.sh "$app/"
+          cp allium/README.md "$app/"
+          cp onionos/App/Retsend/icon.png "$app/"
+          cp -r onionos/App/Retsend/lib "$app/"
+          install -m 755 bin/retsend "$app/retsend"
+          chmod 755 "$app/launch.sh"
+          ls -laR "$pkg"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: retsend-allium
+          path: allium-dist
+
+      - name: Zip for release
+        if: github.event_name == 'release'
+        run: |
+          set -eux
+          (cd allium-dist && zip -r ../retsend-allium.zip .)
+          sha256sum retsend-allium.zip > retsend-allium.zip.sha256
+
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            retsend-allium.zip
+            retsend-allium.zip.sha256

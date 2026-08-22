@@ -16,7 +16,7 @@
 client for retro handhelds: send and receive files with your phone
 or PC over Wi-Fi, no cable or SSH. Compatible with the official LocalSend apps.
 
-It targets [PortMaster-compatible](https://portmaster.games/supported-devices.html) Linux handhelds and the Miyoo Mini Plus and Flip running OnionOS, both of which are gamepad-only systems without a compositor. It also runs on regular desktop Linux and on Android handhelds and phones too.
+It targets [PortMaster-compatible](https://portmaster.games/supported-devices.html) Linux handhelds and the Miyoo Mini Plus and Flip running OnionOS or Allium, all of which are gamepad-only systems without a compositor. It also runs on regular desktop Linux and on Android handhelds and phones too.
 
 | Receive | Request | Save | Transfer |
 |:---:|:---:|:---:|:---:|
@@ -60,6 +60,18 @@ root of the SD card, so the app lands in `App/Retsend/`. It shows up under Apps,
 The zip carries an SDL2 built for the Miyoo's panel and a launcher that asks for
 the software renderer, since the SSD202D has no GPU at all. What ships inside it,
 in full: [onionos/App/Retsend/lib/README.md](onionos/App/Retsend/lib/README.md).
+
+## Install (Miyoo Mini Plus / Flip, Allium)
+
+Grab `retsend-allium.zip` from
+[Releases](https://github.com/mxmgorin/retsend/releases) and unzip it at the root
+of the SD card, so the app lands in `Apps/Retsend.pak/`. It shows up on the Apps
+tab, and **MENU quits** it — pressed on its own, since Allium keeps MENU held with
+a pad for brightness and volume.
+
+Same device and same bundled SDL2 as the OnionOS package; what differs is the
+launcher, and that the app closes its own transfers on MENU rather than being
+killed from outside. What ships inside it: [allium/README.md](allium/README.md).
 
 ## Install (Android)
 

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An Allium package**, `retsend-allium.zip`, for the same Miyoo Mini Plus and
+  Flip the OnionOS one serves. Allium is a launcher on the stock firmware, so the
+  binary and the bundled SDL2 are the OnionOS package's; what differs is the
+  layout (`Apps/Retsend.pak/` — only a `.pak` folder counts as an app there) and
+  the launcher. Allium keeps no kill helper and does nothing with MENU for an
+  app, so the app answers the key itself, behind `RETSEND_MENU_QUIT` — set by
+  that launcher alone, so OnionOS keeps its helper and its behaviour.
+- **`SIGTERM` closes the app instead of killing it**, so powering the device off
+  or closing the lid stops the announcer and shuts the sockets down first, and a
+  peer sees a transfer end rather than a connection that stopped answering. A
+  second signal still kills outright, and the headless receiver is left alone.
+
+### Fixed
+
+- **Starts on an Allium card**, which carries neither `libGLESv2.so` nor
+  `libshmvar.so` — an OnionOS card supplies both, and the bundled SDL2 names them
+  in `DT_NEEDED` while calling into neither. `lib/fallback/` holds empty stubs
+  with the right SONAMEs, last on `LD_LIBRARY_PATH` so a real library still wins.
+- **Fills the Miyoo Mini Flip's screen.** Its panel is 752x560 and the bundled
+  drivers assumed the Mini's 640x480: the renderer scales by an integer factor and
+  centres what it draws, so the app ran as a 640x480 island in a black margin. The
+  bundled SDL2 is now our own fork of steward-fu's, which reads the framebuffer's
+  real size, reports it through `SDL_GetDesktopDisplayMode` and takes its texture
+  limit from it; the app opens its window at that size. A Mini and a Mini+ resolve
+  to the same 640x480 they always did.
+
 ## [0.6.0] - 2026-08-20
 
 ### Added
