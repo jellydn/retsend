@@ -7,11 +7,29 @@ files are ours.
 
 ## libSDL2-2.0.so.0
 
-Built from [steward-fu/sdl2](https://github.com/steward-fu/sdl2) at commit
-`0631abc8e8916db6f9bc7e2afd0c22913d092a29` in the upstream Docker recipe,
-`mini_toolchain-v1.0`, `make cfg && make gpu && make sdl2`. It reports itself as
+Built from our fork [mxmgorin/sdl2](https://github.com/mxmgorin/sdl2), branch
+`miyoo-flip-panel` (`24c32243`), which is [steward-fu/sdl2](https://github.com/steward-fu/sdl2)
+at `0631abc8` plus one commit, made in the upstream Docker recipe,
+`mini_toolchain-v1.0`, `make cfg && make sdl2`. It reports itself as
 `libSDL2-2.0.so.0.18.2`, so SDL 2.0.18 — which is the floor retsend builds
 against anyway, for `SDL_RenderGeometry`.
+
+Our commit is `feat(mini): size the framebuffer and textures from the panel`, and
+it exists because the Flip's panel is 752x560 while these drivers assumed the
+Mini's 640x480. Three things in it:
+
+- the framebuffer size is parsed out of `fbset`'s mode line rather than found by
+  `strstr(buf, "752")`, so a panel reporting 750 or anything else is read
+  correctly;
+- `SDL_GetDesktopDisplayMode` answers with that size — the driver used to leave
+  it zeroed, so an app had no way to ask how big the screen was;
+- the renderer's `max_texture_width/height` come from the framebuffer instead of
+  a hardcoded 640x480, which is what stopped a window that fills a Flip from
+  having a texture to draw into.
+
+On a Mini or Mini+ every one of those resolves to the same 640x480 it always
+was. The exported symbol set is unchanged (805 symbols, checked both ways) and
+so is `DT_NEEDED`.
 
 Previous packages carried a prebuilt copy taken from the `Sonic Mania` port of
 the OnionOS Ports-Collection, built from
@@ -97,13 +115,13 @@ firmware's; `libGLESv2` is an OnionOS card's, and `fallback/` covers the cards
 without one.
 
     adfaba3ed88c5e5acd521384f047bc369f52578f01d0b6b39fc7591e94e93944  libEGL.so
-    d0c8f1b8cffe367c283375a9475f974c551024c61f9b189f81da84ce7752ccff  libSDL2-2.0.so.0
+    81c07c104c025ff61586f53a26245d37e5006db5961e55a88e7a648590db5cd8  libSDL2-2.0.so.0
     db7ad1f59cbac5a23aad9dd7eba87322b5921c486097c1140b24f2d82af28892  libjson-c.so.5
 
 ## Licences
 
 `libSDL2-2.0.so.0` is Simple DirectMedia Layer, under the zlib licence; the
-corresponding source is the steward-fu commit named above.
+corresponding source is the fork and commit named above.
 
 > Simple DirectMedia Layer
 > Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
@@ -125,8 +143,8 @@ corresponding source is the steward-fu commit named above.
 > 3. This notice may not be removed or altered from any source distribution.
 
 The `Mini` drivers added on top of it are LGPL-2.1, (C) 2025 Steward Fu, as
-their source files state; they are built into this shared library, and the
-source they come from is the commit named above.
+their source files state, with our one commit on top; they are built into this
+shared library, and the source is the fork named above.
 
 `libjson-c.so.5` is json-c, under the MIT licence:
 

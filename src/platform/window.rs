@@ -33,10 +33,11 @@ pub fn open(sdl: &Sdl, config: &DisplayConfig) -> Result<EguiWindow, String> {
         ]
     };
 
+    let size = panel_size(&video_subsystem).unwrap_or((config.width, config.height));
     let mut window = EguiWindow::new(
         &video_subsystem,
         "retsend",
-        (config.width, config.height),
+        size,
         |builder| {
             builder.resizable();
         },
@@ -47,6 +48,22 @@ pub fn open(sdl: &Sdl, config: &DisplayConfig) -> Result<EguiWindow, String> {
     let (w, h) = window.window().drawable_size();
     log::info!("window: {:?} renderer ({w}x{h})", window.renderer());
     Ok(window)
+}
+
+/// The panel's own size on a Miyoo, where a window smaller than the framebuffer
+/// is drawn centred with a black border round it — the Flip's is 752x560.
+fn panel_size(video: &sdl2::VideoSubsystem) -> Option<(u32, u32)> {
+    if !matches!(video.current_video_driver(), "Mini" | "mmiyoo") {
+        return None;
+    }
+    // An older bundled SDL leaves the mode zeroed, so treat a small one as no
+    // answer rather than opening a window nothing can draw into.
+    let mode = video.desktop_display_mode(0).ok()?;
+    let (w, h) = (u32::try_from(mode.w).ok()?, u32::try_from(mode.h).ok()?);
+    (w >= 320 && h >= 240).then(|| {
+        log::info!("panel: {w}x{h} from the video driver");
+        (w, h)
+    })
 }
 
 fn software_only() -> bool {
