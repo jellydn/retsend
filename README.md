@@ -52,47 +52,25 @@ Grab `retsend-portmaster.zip` from
 [Releases](https://github.com/mxmgorin/retsend/releases) and unpack it
 into your ports folder (e.g. `/roms/ports/`).
 
-## Install (Miyoo Mini Plus / Flip, OnionOS)
+## Install (Miyoo Mini Plus / Flip)
 
-Grab `retsend-onionos.zip` from
+Download the appropriate zip from
 [Releases](https://github.com/mxmgorin/retsend/releases) and unzip it at the
-root of the SD card, so the app lands in `App/Retsend/`. It shows up under Apps, and **MENU quits** it.
-The zip carries an SDL2 built for the Miyoo's panel and a launcher that asks for
-the software renderer, since the SSD202D has no GPU at all. What ships inside it,
-in full: [onionos/App/Retsend/lib/README.md](onionos/App/Retsend/lib/README.md).
+root of the SD card.
 
-## Install (Miyoo Mini Plus / Flip, Allium)
+| OS       | Package                | Location            |
+| -------- | ---------------------- | ------------------- |
+| OnionOS  | `retsend-onionos.zip`  | `App/Retsend/`      |
+| Allium   | `retsend-allium.zip`   | `Apps/Retsend.pak/` |
+| spruceOS | `retsend-spruceos.zip` | `App/Retsend/`      |
 
-Grab `retsend-allium.zip` from
-[Releases](https://github.com/mxmgorin/retsend/releases) and unzip it at the root
-of the SD card, so the app lands in `Apps/Retsend.pak/`. It shows up on the Apps
-tab, and **MENU quits** it — pressed on its own, since Allium keeps MENU held with
-a pad for brightness and volume.
-
-Same device and same bundled SDL2 as the OnionOS package; what differs is the
-launcher, and that the app closes its own transfers on MENU rather than being
-killed from outside. What ships inside it: [allium/README.md](allium/README.md).
-
-## Install (Miyoo Mini Plus / Mini Flip, spruceOS)
-
-Grab `retsend-spruceos.zip` from
-[Releases](https://github.com/mxmgorin/retsend/releases) and unzip it at the root
-of the SD card, so the app lands in `App/Retsend/`. It shows up under Apps, and
-**MENU quits** it.
-
-Turn wifi on in spruce's settings first — it brings the radio up at boot and only
-when that setting is on, so an empty radar is otherwise hard to read. The same
-device and the same bundled SDL2 again, which matters more here: spruce ships a
-Miyoo SDL2 of its own whose drivers answer to other names. What ships inside it:
-[spruce/README.md](spruce/README.md).
+The app will appear in the respective Apps menu. **MENU quits** the app on all
+three systems.
 
 ## Install (Android)
 
 Grab `retsend-android-arm64.apk` from
-[Releases](https://github.com/mxmgorin/retsend/releases) and sideload it. Same
-app, driven by touch or by a pad, with the system Back button as B: tap a device
-to send to it, a file to pick it, a row to open it, and the button hints along
-the bottom are themselves the buttons.
+[Releases](https://github.com/mxmgorin/retsend/releases) and sideload it. 
 
 Grant **All files access** when it asks and received files land in `Download/`,
 where an emulator or file manager can reach them; deny it and the app is confined
