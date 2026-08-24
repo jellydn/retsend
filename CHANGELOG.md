@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-24
+
 ### Changed
 
 - **Pinned rows sit in a band of their own** in the file browser, closed by a
@@ -370,7 +372,8 @@ use (Knulli, muOS, ROCKNIX), running on desktop Linux too.
 - Brand wordmark and window icon.
 - Builds for Linux x86_64 and aarch64, with PortMaster packaging.
 
-[Unreleased]: https://github.com/mxmgorin/retsend/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/mxmgorin/retsend/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/mxmgorin/retsend/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mxmgorin/retsend/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mxmgorin/retsend/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/mxmgorin/retsend/compare/v0.5.4...v0.5.5
