@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-24
+
 ### Added
 
 - **An Allium package**, `retsend-allium.zip`, for the same Miyoo Mini Plus and
@@ -16,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the launcher. Allium keeps no kill helper and does nothing with MENU for an
   app, so the app answers the key itself, behind `RETSEND_MENU_QUIT` — set by
   that launcher alone, so OnionOS keeps its helper and its behaviour.
+- **A spruceOS package**, `retsend-spruceos.zip`, for those same two devices.
+  spruce reads `App/Retsend/` as OnionOS does, so what the package adds is a
+  `config.json` naming the devices it belongs on and a launcher; the bundled SDL2
+  counts for more here, since spruce carries a Miyoo build of its own whose
+  drivers answer to other names. MENU is the way out and genuinely the app's:
+  spruce's own handler returns early for anything launched out of `App/` rather
+  than `Emu/`. The launcher writes a line into spruce's log when wifi is off in
+  its settings, since an empty radar otherwise reads as a bug.
+- **Retsend in Allium's Games tab**, from a `ports/Retsend.port/` folder the
+  Allium package carries. Copied to `Roms/PORTS/`, the Ports Collection console
+  runs its `launch.sh`, which hands over to the install under `Apps/` — one copy
+  of the app, and one identity on the network.
 - **`SIGTERM` closes the app instead of killing it**, so powering the device off
   or closing the lid stops the announcer and shuts the sockets down first, and a
   peer sees a transfer end rather than a connection that stopped answering. A
@@ -341,7 +355,8 @@ use (Knulli, muOS, ROCKNIX), running on desktop Linux too.
 - Brand wordmark and window icon.
 - Builds for Linux x86_64 and aarch64, with PortMaster packaging.
 
-[Unreleased]: https://github.com/mxmgorin/retsend/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/mxmgorin/retsend/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mxmgorin/retsend/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mxmgorin/retsend/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/mxmgorin/retsend/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/mxmgorin/retsend/compare/v0.5.3...v0.5.4
