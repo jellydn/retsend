@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 mod device;
-mod display;
+pub mod display;
 mod input;
 mod network;
 mod paths;
@@ -22,6 +22,23 @@ pub use input::InputConfig;
 pub use network::NetworkConfig;
 pub use paths::{data_dir, device_scale, env_browser_roots};
 pub use transfer::TransferConfig;
+
+/// A settings value the UI walks in steps rather than types.
+pub struct Range {
+    pub min: f32,
+    pub max: f32,
+    pub step: f32,
+}
+
+impl Range {
+    /// Step `value` by `dir` steps and clamp it. Snapped back onto the grid:
+    /// adding a step over and over drifts, and the drift is what the config
+    /// file ends up carrying.
+    pub fn step(&self, value: f32, dir: i32) -> f32 {
+        let stepped = value + dir as f32 * self.step;
+        ((stepped / self.step).round() * self.step).clamp(self.min, self.max)
+    }
+}
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -77,6 +94,12 @@ impl AppConfig {
     fn sanitize(&mut self) {
         fix("display.width", &mut self.display.width, 320, 7680);
         fix("display.height", &mut self.display.height, 240, 4320);
+        fix_f32(
+            "display.scale",
+            &mut self.display.scale,
+            display::SCALE.min,
+            display::SCALE.max,
+        );
         // Ports below 1024 need root; 0 means "ephemeral" which would break
         // re-announce consistency.
         fix("network.port", &mut self.network.port, 1024, u16::MAX);

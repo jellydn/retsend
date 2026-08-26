@@ -1,15 +1,14 @@
 //! Path/directory and environment resolution shared across the crate.
 
-/// UI scale factor. The handheld launcher can set `RETSEND_SCALE` for tiny or
-/// high-DPI screens; desktop leaves it unset and stays at 1.0. Applied to
-/// egui's zoom factor. Clamped to a sane range.
-pub fn device_scale() -> f32 {
+/// UI scale override from `RETSEND_SCALE`, clamped. `None` — the usual case —
+/// leaves the panel to decide; a launcher that knows better says so here, and
+/// the `display.scale` setting is still read over it.
+pub fn device_scale() -> Option<f32> {
     std::env::var("RETSEND_SCALE")
         .ok()
         .and_then(|v| v.parse::<f32>().ok())
         .filter(|s| s.is_finite() && *s > 0.0)
         .map(|s| s.clamp(0.5, 6.0))
-        .unwrap_or(1.0)
 }
 
 /// The per-user data directory (with a trailing separator) for writable files —

@@ -65,7 +65,8 @@ Logs go to logcat: `adb logcat -s retsend`.
   PortMaster and OnionOS launchers set, before SDL starts: `RETSEND_DATA_DIR`
   (internal `getFilesDir()`: config, TLS identity, history), `RETSEND_SAVE_DIR`,
   `RETSEND_BROWSER_ROOTS` (the storage volumes it can reach), `RETSEND_ALIAS`
-  (`Build.MODEL`), `RETSEND_SCALE` (display density) and `RETSEND_PANIC_FILE`.
+  (`Build.MODEL`) and `RETSEND_PANIC_FILE`. Not the scale: fitting the 640×480
+  design to the panel already lands on the same physical size at any density.
 - **Permissions** — `RetsendLauncherActivity` is the launcher entry and asks for
   all-files access *before* starting SDL, because the paths above are read once
   at startup and the save folder is persisted on first run.

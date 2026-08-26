@@ -52,10 +52,12 @@ ureq = { version = "3", default-features = false, features = ["rustls"] }
 # Patch floor, not a pin: bare "0.23" also admits 0.23.13..=0.23.17, which panic
 # in Acceptor::accept (RUSTSEC-2024-0399, fixed in 0.23.18).
 rustls = { version = "0.23.42", default-features = false, features = ["ring", "std"] }
-rcgen = "0.14"
+# Default features are off only to drop rcgen's `pem`: we read its DER output,
+# and that feature pins pem 3, duplicating the crate against our own.
+rcgen = { version = "0.14", default-features = false, features = ["ring"] }
 # Only to hand ureq the stored identity: its client-auth types parse PEM, and
 # the DER constructor's `KeyKind` is not exported.
-pem = "3"
+pem = "4"
 sha2 = "0.11"
 # Only for SO_REUSEADDR/SO_REUSEPORT before binding UDP 53317 — std can't set
 # them pre-bind, and without them we can't coexist with the official LocalSend

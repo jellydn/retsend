@@ -42,9 +42,8 @@ public class RetsendActivity extends SDLActivity {
         setEnv("RETSEND_BROWSER_ROOTS", browserRoots());
         // Only seeds the alias; the Settings screen owns it from then on.
         setEnv("RETSEND_ALIAS", Build.MODEL);
-        // Phone screens are dense enough that the UI would be unreadable at 1:1
-        // pixels. ~1.0 (mdpi) .. ~3.5 (xxxhdpi), applied to egui's zoom factor.
-        setEnv("RETSEND_SCALE", String.valueOf(getResources().getDisplayMetrics().density));
+        // Not RETSEND_SCALE: fitting the 640x480 design to the panel already
+        // lands on the same physical size whatever the density is.
 
         acquireMulticastLock();
 

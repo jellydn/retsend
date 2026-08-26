@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The UI fits itself to the screen it is on.** Every screen is laid out in
+  points against a 640×480 design, and one zoom factor carries the lot — fonts,
+  rows, gaps — so a desktop window and a 752×560 Flip panel show the same layout
+  at the size each has room for, rather than the design at 1:1 pixels and text
+  that shrinks with the panel. A panel only a little past the design keeps a
+  whole zoom: fractional zoom lands glyphs between pixels, which reads as uneven
+  type where there is no subpixel positioning, so the spare pixels become margin
+  instead. A phone held upright is the same screen turned, so the fit measures
+  long edge to long edge and the lists get a narrower measure, not smaller rows.
+- **`RETSEND_SCALE` now pins the base** the setting is read over, instead of
+  being the whole answer. Android no longer passes the display density — the fit
+  lands on the same physical size at any density.
+
 ### Added
+
+- **A "UI scale" setting**, 60% to 160% of what the screen itself asks for,
+  stepped with ◂ ▸ on its row (L1/R1 still switch tabs, and the hints name both
+  arrows so a screen with no pad can reach them). Persisted as
+  `[display] scale`, applied live.
 
 - **A send can be repeated from the History tab**, with A on its row. The log
   now keeps the source paths of a send and the address it went to; the resend
