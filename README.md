@@ -16,7 +16,7 @@
 client for retro handhelds: send and receive files with your phone
 or PC over Wi-Fi, no cable or SSH. Compatible with the official LocalSend apps.
 
-It targets [PortMaster-compatible](https://portmaster.games/supported-devices.html) Linux handhelds and the Miyoo Mini Plus and Flip running [OnionOS](https://github.com/OnionUI/Onion), [spruceOS](https://github.com/spruceUI/spruceOS) or [Allium](https://github.com/goweiwen/Allium), all of which are gamepad-only systems without a compositor. It also runs on regular desktop Linux and on Android.
+It targets [PortMaster-compatible](https://portmaster.games/supported-devices.html) Linux handhelds, the handhelds running [muOS](https://muos.dev), and the Miyoo Mini Plus and Flip running [OnionOS](https://github.com/OnionUI/Onion), [spruceOS](https://github.com/spruceUI/spruceOS) or [Allium](https://github.com/goweiwen/Allium), all of which are gamepad-only systems without a compositor. It also runs on regular desktop Linux and on Android.
 
 <p align="center">
   <img src="resources/retsend-devices.jpg" alt="Three devices on a couch: a handheld showing the radar of nearby devices, a clamshell handheld waiting to receive, and a phone running the official LocalSend app" width="480">
@@ -56,6 +56,14 @@ this is the missing end: a client built for a gamepad and screen.
 Grab `retsend-portmaster.zip` from
 [Releases](https://github.com/mxmgorin/retsend/releases) and unpack it
 into your ports folder (e.g. `/roms/ports/`).
+
+## Install (muOS)
+
+Copy `retsend-muos.muxapp` from
+[Releases](https://github.com/mxmgorin/retsend/releases) to `ARCHIVE/` on the SD
+card and install it from **Applications → Archive Manager**. It then sits under
+**Applications**, and **B on the home screen quits** — muOS keeps no way out of
+its own. See [muos/README.md](muos/README.md).
 
 ## Install (Miyoo Mini Plus / Flip)
 
