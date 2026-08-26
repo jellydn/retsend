@@ -67,6 +67,9 @@ pub fn render(root: &mut egui::Ui, data: &HistoryData, taps: &mut Vec<AppCommand
         if data.can_resend {
             hints.push(("A", "Send again", Some(AppCommand::Confirm)));
         }
+        if crate::app::back_quits() {
+            hints.push(("B", "Quit", Some(AppCommand::Back)));
+        }
         super::home::hint_bar(ui, &hints, taps);
         ui.add_space(4.0);
     });

@@ -28,14 +28,14 @@ pub fn render(root: &mut egui::Ui, data: &ReceiveData, taps: &mut Vec<AppCommand
     egui::Panel::bottom(super::BOTTOM_PANEL_ID).show(root, |ui| {
         ui.add_space(4.0);
         // "Refresh" is the radar's word; here the button re-announces us.
-        super::home::hint_bar(
-            ui,
-            &[
-                ("← →", "Tabs", None),
-                ("Select", "Announce", Some(AppCommand::ReAnnounce)),
-            ],
-            taps,
-        );
+        let mut hints: Vec<super::home::Hint> = vec![
+            ("← →", "Tabs", None),
+            ("Select", "Announce", Some(AppCommand::ReAnnounce)),
+        ];
+        if crate::app::back_quits() {
+            hints.push(("B", "Quit", Some(AppCommand::Back)));
+        }
+        super::home::hint_bar(ui, &hints, taps);
         ui.add_space(4.0);
     });
 

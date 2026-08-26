@@ -20,7 +20,7 @@ use crate::transfer::outbound::{self, OutboundSession};
 use crate::ui::AppUi;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// Rows a shoulder-button page jump moves in a list.
 const PAGE_JUMP: i32 = 8;
@@ -43,6 +43,17 @@ pub struct App {
     /// The radar row A was pressed on; the browser's Start sends here.
     send_target: Option<SendTarget>,
     running: bool,
+}
+
+/// Whether Back on the home screen leaves the app. Android's Back is a system
+/// button that has to lead somewhere; on a handheld only a launcher keeping no
+/// kill helper of its own hands the key over.
+pub fn back_quits() -> bool {
+    static BACK_QUITS: OnceLock<bool> = OnceLock::new();
+    *BACK_QUITS.get_or_init(|| {
+        cfg!(target_os = "android")
+            || std::env::var_os("RETSEND_BACK_QUIT").is_some_and(|v| v != "0")
+    })
 }
 
 struct SendTarget {
@@ -329,11 +340,10 @@ impl App {
             (Focus::Tabs, AppCommand::Alt) if self.ui.tabs.active() == Tab::History => {
                 self.delete_history_entry();
             }
-            // Nothing left to leave. Android's Back is a system button that has
-            // to lead somewhere, so there it quits; on the handhelds the
-            // launcher owns quitting and this stays inert.
+            // Nothing left to leave: where the launcher owns quitting this
+            // stays inert, and where it does not, this is the way out.
             (Focus::Tabs, AppCommand::Back) => {
-                if cfg!(target_os = "android") {
+                if back_quits() {
                     self.running = false;
                 }
             }
