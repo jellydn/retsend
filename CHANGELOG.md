@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A muOS package**, `retsend-muos.muxapp`, installed from Archive Manager and
+  listed under Applications rather than under Ports as the PortMaster build is.
+  The launcher hands muOS's own `SETUP_APP` the pad and the governor, holds the
+  device awake for the length of a transfer, and points saves at `ROMS/` on the
+  card that booted. **B on the home screen quits**, which muOS needs: its only
+  exit is a `kill -9` that would cut a transfer where it stands, so the app
+  answers the key itself and closes the sockets on the way out. Other ports leave
+  B inert — there the launcher owns quitting — and the launcher opts in with
+  `RETSEND_BACK_QUIT`. The home tabs name the key in their hints only where it is
+  on, so nowhere else grows a hint for a button that does nothing.
+
 - **A "UI scale" setting**, 60% to 160% of what the screen itself asks for,
   stepped with ◂ ▸ on its row (L1/R1 still switch tabs, and the hints name both
   arrows so a screen with no pad can reach them). Persisted as

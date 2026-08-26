@@ -328,3 +328,54 @@ jobs:
           files: |
             retsend-allium.zip
             retsend-allium.zip.sha256
+
+  muos:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: retsend-linux-aarch64
+          path: bin
+
+      - name: Assemble the application folder
+        run: |
+          set -eux
+          pkg=muos-dist
+          app=$pkg/Retsend
+          rm -rf "$pkg"
+          mkdir -p "$app"
+          # Archive Manager unpacks a .muxapp into MUOS/application/, so the
+          # folder at the archive root is the installed app.
+          cp muos/mux_launch.sh "$app/"
+          cp muos/README.md "$app/"
+          # The glyph the app list falls back to, named after the ICON header.
+          # 24x24, the size themes cut theirs to: muOS draws it at native size.
+          cp -r muos/glyph "$app/"
+          install -m 755 bin/retsend "$app/retsend"
+          chmod 755 "$app/mux_launch.sh"
+          ls -laR "$pkg"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: retsend-muos
+          path: muos-dist
+
+      - name: Pack for release
+        if: github.event_name == 'release'
+        run: |
+          set -eux
+          # .muxapp is a zip; the extension is what Archive Manager dispatches on.
+          (cd muos-dist && zip -r ../retsend-muos.muxapp Retsend)
+          sha256sum retsend-muos.muxapp > retsend-muos.muxapp.sha256
+
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            retsend-muos.muxapp
+            retsend-muos.muxapp.sha256
