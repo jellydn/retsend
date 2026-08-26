@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-26
+
 ### Changed
 
 - **The UI fits itself to the screen it is on.** Every screen is laid out in
@@ -415,7 +417,8 @@ use (Knulli, muOS, ROCKNIX), running on desktop Linux too.
 - Brand wordmark and window icon.
 - Builds for Linux x86_64 and aarch64, with PortMaster packaging.
 
-[Unreleased]: https://github.com/mxmgorin/retsend/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/mxmgorin/retsend/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/mxmgorin/retsend/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/mxmgorin/retsend/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mxmgorin/retsend/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mxmgorin/retsend/compare/v0.5.5...v0.6.0
