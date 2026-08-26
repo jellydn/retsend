@@ -49,6 +49,19 @@ const PROMPT_REFRESH: Duration = Duration::from_millis(100);
 /// out to `iw`, so not per frame.
 const NET_STATUS_TTL: Duration = Duration::from_secs(2);
 
+/// The panel every screen is laid out for; the zoom fits it to the real one.
+const BASE_SIZE: egui::Vec2 = egui::vec2(640.0, 480.0);
+/// Bounds on the zoom actually installed, whatever the fit and the setting
+/// between them ask for.
+const SCALE_RANGE: std::ops::RangeInclusive<f32> = 0.5..=4.0;
+const SCALE_STEP: f32 = crate::config::display::SCALE.step;
+/// A panel reported past this is a driver answering nonsense, not a screen.
+const MAX_PANEL: f32 = 8192.0;
+/// How far past a whole number a fit may reach before the fraction is worth it.
+/// Fractional zoom lands glyphs between pixels, which reads as uneven type on a
+/// panel with no subpixel positioning; the spare pixels become margin instead.
+const WHOLE_ZOOM_REACH: f32 = 0.25;
+
 /// Shared ids for the one top and one bottom panel every base screen draws.
 /// egui paints a red seam at a panel edge whenever a panel id changes between
 /// frames (its changed-id-between-passes check — see the tab-bar painter note
@@ -125,14 +138,21 @@ pub struct AppUi {
     taps: Vec<AppCommand>,
     /// Throttled IP/SSID for the Receive screen's diagnostic line.
     net_status: NetStatusCache,
+    /// `RETSEND_SCALE`, standing in for the panel's own fit where a launcher
+    /// knows better.
+    forced_scale: Option<f32>,
+    /// The zoom in force, so a frame that wants the same one installs nothing.
+    scale: f32,
 }
 
 impl AppUi {
     pub fn new(sdl: &sdl2::Sdl, config: &crate::config::DisplayConfig) -> Result<Self, String> {
         let egui = window::open(sdl, config)?;
         theme::apply(egui.ctx());
-        let scale = crate::config::device_scale();
-        if scale != 1.0 {
+        // The fit needs a frame's measurements; a pinned scale is known now, so
+        // the first frame is already at it rather than at 1.0.
+        let forced_scale = crate::config::device_scale();
+        if let Some(scale) = forced_scale {
             log::info!("applying RETSEND_SCALE {scale}");
             egui.ctx().set_zoom_factor(scale);
         }
@@ -153,6 +173,8 @@ impl AppUi {
             history_count: 0,
             taps: Vec::new(),
             net_status: NetStatusCache::new(),
+            forced_scale,
+            scale: forced_scale.unwrap_or(1.0),
         })
     }
 
@@ -171,9 +193,31 @@ impl AppUi {
         std::mem::take(&mut self.taps)
     }
 
+    /// Scale the whole UI to the panel it is on, then by what the settings ask
+    /// for. Every size in the renderers is in points against a 640×480 design,
+    /// so one zoom factor carries the lot — fonts, rows, gaps and all — rather
+    /// than each screen carrying its own notion of a small display. Re-read
+    /// every frame, since a desktop window resizes.
+    fn sync_scale(&mut self, wanted_by_user: f32) {
+        let ctx = self.egui.ctx();
+        let native = panel_points(ctx.content_rect().size(), ctx.zoom_factor());
+        if !(1.0..=MAX_PANEL).contains(&native.x) || !(1.0..=MAX_PANEL).contains(&native.y) {
+            return;
+        }
+        let wanted = wanted_scale(native, self.forced_scale, wanted_by_user);
+        if (wanted - self.scale).abs() < f32::EPSILON {
+            return;
+        }
+        // Two decimals: snapping to the step grid leaves float noise in the tail.
+        log::info!("ui scale {wanted:.2} for {}x{} points", native.x, native.y);
+        ctx.set_zoom_factor(wanted);
+        self.scale = wanted;
+    }
+
     /// Build the frame. Reads shared net state (brief locks) before entering
     /// the egui closure.
     pub fn update(&mut self, net: &NetService, config: &AppConfig, history: &History) {
+        self.sync_scale(config.display.scale);
         let screen = self.screen_data(net, config, history);
         let prompt_data = prompt_data(net);
         // The destination picker stands in for the modal while it is up: the
@@ -478,6 +522,28 @@ fn endpoint_scheme_port(net: &NetService) -> (String, u16) {
     )
 }
 
+/// The points a panel covers at `zoom` — what the design is fitted against.
+fn panel_points(content: egui::Vec2, zoom: f32) -> egui::Vec2 {
+    (content * zoom).round()
+}
+
+/// The zoom a panel of `native` points wants: what the design fits into it, or
+/// `forced` where a launcher said so, taken `user` times over and snapped to a
+/// step the layout can settle on.
+fn wanted_scale(native: egui::Vec2, forced: Option<f32>, user: f32) -> f32 {
+    // Long edge to long edge: a phone held upright is the same screen, so the
+    // rows keep their size and the list gets a narrower measure instead.
+    let fit =
+        (native.max_elem() / BASE_SIZE.max_elem()).min(native.min_elem() / BASE_SIZE.min_elem());
+    let fit = if fit >= 1.0 && fit.fract() <= WHOLE_ZOOM_REACH {
+        fit.floor()
+    } else {
+        fit
+    };
+    let wanted = forced.unwrap_or(fit) * user;
+    ((wanted / SCALE_STEP).round() * SCALE_STEP).clamp(*SCALE_RANGE.start(), *SCALE_RANGE.end())
+}
+
 /// Unix seconds now — for the history's relative-time labels.
 fn unix_now() -> u64 {
     std::time::SystemTime::now()
@@ -544,7 +610,147 @@ fn render_toasts(ctx: &egui::Context, toasts: &[String]) {
 
 #[cfg(test)]
 mod tests {
-    use super::fmt_bytes;
+    use super::*;
+    use crate::config::display::SCALE;
+
+    /// The panel the screens were drawn for, a handheld a little past it (the
+    /// Miyoo Flip), a desktop window, and a phone held upright.
+    const HANDHELD: egui::Vec2 = BASE_SIZE;
+    const FLIP: egui::Vec2 = egui::vec2(752.0, 560.0);
+    const DESKTOP: egui::Vec2 = egui::vec2(1280.0, 720.0);
+    const UPRIGHT: egui::Vec2 = egui::vec2(BASE_SIZE.y, BASE_SIZE.x);
+
+    /// Snapping multiplies the step back out, so the answers land a rounding
+    /// short of the round number they read as.
+    fn assert_scale(got: f32, want: f32) {
+        assert!((got - want).abs() < SCALE_STEP / 2.0, "{got} is not {want}");
+    }
+
+    /// Every scale the setting can be stepped to.
+    fn user_scales() -> impl Iterator<Item = f32> {
+        let steps = ((SCALE.max - SCALE.min) / SCALE.step).round() as i32;
+        (0..=steps).map(move |i| SCALE.min + i as f32 * SCALE.step)
+    }
+
+    #[test]
+    fn the_design_lands_at_one_on_the_panel_it_was_drawn_for() {
+        assert_scale(wanted_scale(HANDHELD, None, 1.0), 1.0);
+        assert_scale(wanted_scale(DESKTOP, None, 1.0), 1.5);
+    }
+
+    /// The Flip's panel is 17% past the design, which is not worth rendering
+    /// type between pixels for; the spare pixels become margin instead.
+    #[test]
+    fn a_panel_a_little_past_the_design_keeps_a_whole_zoom() {
+        assert_scale(wanted_scale(FLIP, None, 1.0), 1.0);
+        // Far enough past it, the fraction is the point.
+        assert_scale(wanted_scale(DESKTOP, None, 1.0), 1.5);
+    }
+
+    /// A phone in portrait is the same screen turned, so the rows keep their
+    /// size and the lists get a narrower measure.
+    #[test]
+    fn a_panel_held_upright_asks_for_the_same_scale() {
+        assert_scale(wanted_scale(UPRIGHT, None, 1.0), 1.0);
+        for panel in [HANDHELD, FLIP, DESKTOP] {
+            let upright = egui::vec2(panel.y, panel.x);
+            for user in user_scales() {
+                assert_eq!(
+                    wanted_scale(panel, None, user),
+                    wanted_scale(upright, None, user),
+                    "{panel:?} at {user} resizes itself when held upright"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_setting_is_read_against_whatever_the_panel_asked_for() {
+        // The point of a factor: one setting means the same thing on both.
+        assert_scale(wanted_scale(HANDHELD, None, 1.2), 1.2);
+        assert_scale(wanted_scale(DESKTOP, None, 1.2), 1.8);
+        // A launcher's RETSEND_SCALE is a base like any other.
+        assert_scale(wanted_scale(DESKTOP, Some(2.0), 1.2), 2.4);
+    }
+
+    #[test]
+    fn neither_end_of_the_setting_can_push_the_zoom_out_of_range() {
+        for panel in [HANDHELD, DESKTOP, egui::vec2(7680.0, 4320.0)] {
+            for user in [SCALE.min, SCALE.max] {
+                let scale = wanted_scale(panel, None, user);
+                assert!(
+                    SCALE_RANGE.contains(&scale),
+                    "{panel:?} at {user} → {scale}"
+                );
+            }
+        }
+    }
+
+    /// What `Context::content_rect` hands back for a panel at `zoom`: the
+    /// points it lays out in, snapped to egui's 1/32pt grid.
+    fn content_rect(panel: egui::Vec2, zoom: f32) -> egui::Vec2 {
+        use egui::emath::GuiRounding as _;
+        (panel / zoom).round_ui()
+    }
+
+    /// One frame of the loop: measure the panel through the zoom in force, and
+    /// ask what the next frame should be at.
+    fn next_zoom(panel: egui::Vec2, zoom: f32, user: f32) -> f32 {
+        wanted_scale(panel_points(content_rect(panel, zoom), zoom), None, user)
+    }
+
+    #[test]
+    fn a_scale_settles_rather_than_swapping_between_two_steps_every_frame() {
+        // The measurement is taken through the zoom set last frame, so a scale
+        // landing exactly half a step from the grid could round either way
+        // depending on the zoom it was measured through — and then change it.
+        for panel in [HANDHELD, UPRIGHT, FLIP, DESKTOP] {
+            for user in user_scales() {
+                let mut zoom = 1.0;
+                for _ in 0..8 {
+                    zoom = next_zoom(panel, zoom, user);
+                }
+                assert_eq!(
+                    next_zoom(panel, zoom, user),
+                    zoom,
+                    "{panel:?} at {user} swaps between the two"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_step_of_the_setting_moves_the_panel_the_design_was_drawn_for() {
+        // A setting stepping by 5% into a zoom snapped to 10% would spend half
+        // its presses on nothing at all.
+        let mut zooms: Vec<f32> = user_scales()
+            .map(|user| wanted_scale(HANDHELD, None, user))
+            .collect();
+        let asked = zooms.len();
+        zooms.dedup();
+        assert_eq!(zooms.len(), asked, "{zooms:?} repeats a zoom");
+    }
+
+    #[test]
+    fn a_scale_is_snapped_so_a_resize_drag_does_not_relayout_on_every_pixel() {
+        // 683×512 fits at 1.066…, and 1.15 asks for a step and a half.
+        for (panel, user) in [(egui::vec2(683.0, 512.0), 1.0), (HANDHELD, 1.15)] {
+            let steps = wanted_scale(panel, None, user) / SCALE_STEP;
+            assert!((steps - steps.round()).abs() < 1e-3, "{steps} is not whole");
+        }
+    }
+
+    #[test]
+    fn a_step_lands_back_on_the_grid_rather_than_drifting() {
+        let mut scale = 1.0;
+        for _ in 0..4 {
+            scale = SCALE.step(scale, 1);
+        }
+        assert_scale(scale, 1.2);
+        // Neither end walks past itself.
+        assert_eq!(SCALE.step(SCALE.max, 1), SCALE.max);
+        assert_eq!(SCALE.step(SCALE.min, -1), SCALE.min);
+    }
 
     #[test]
     fn fmt_bytes_scales_units() {

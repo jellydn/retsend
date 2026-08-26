@@ -2,7 +2,7 @@
 //! row's action in the footer.
 
 use super::theme;
-use crate::app::AppCommand;
+use crate::app::{AppCommand, Direction};
 use crate::config::AppConfig;
 use crate::overlay::settings::Settings;
 use egui_sdl2::egui;
@@ -14,10 +14,15 @@ pub fn render(
     actual_port: u16,
     taps: &mut Vec<AppCommand>,
 ) {
-    // Order matches `crate::overlay::settings::ROWS`; third field is the A verb.
-    let rows: [(&str, String, &str); crate::overlay::settings::ROW_COUNT] = [
-        ("Device name", config.device.alias.clone(), "Edit"),
-        ("Save folder", config.transfer.save_dir.clone(), "Choose"),
+    // Order matches `crate::overlay::settings::ROWS`; third field is the A verb,
+    // `None` on the rows ◂ ▸ walk instead.
+    let rows: [(&str, String, Option<&str>); crate::overlay::settings::ROW_COUNT] = [
+        ("Device name", config.device.alias.clone(), Some("Edit")),
+        (
+            "Save folder",
+            config.transfer.save_dir.clone(),
+            Some("Choose"),
+        ),
         (
             "Quick save",
             if config.transfer.auto_accept {
@@ -25,7 +30,7 @@ pub fn render(
             } else {
                 "off".into()
             },
-            "Toggle",
+            Some("Toggle"),
         ),
         (
             "If a file exists",
@@ -34,7 +39,7 @@ pub fn render(
             } else {
                 "keep both — save as name (1)".into()
             },
-            "Toggle",
+            Some("Toggle"),
         ),
         (
             "Received folders",
@@ -43,12 +48,12 @@ pub fn render(
             } else {
                 "flatten into the save routes".into()
             },
-            "Toggle",
+            Some("Toggle"),
         ),
         (
             "Auto save routes",
             auto_routes_value(config.transfer.auto_routes, state.auto_route_count),
-            "Toggle",
+            Some("Toggle"),
         ),
         (
             "Save routes",
@@ -57,17 +62,18 @@ pub fn render(
                 1 => "1 extension".into(),
                 n => format!("{n} extensions"),
             },
-            "Edit",
+            Some("Edit"),
         ),
         (
             "Port",
             port_label(config.network.port, actual_port, state.port_dirty),
-            "Edit",
+            Some("Edit"),
         ),
+        ("UI scale", scale_label(config.display.scale), None),
         (
             "About",
             format!("retsend {}", env!("CARGO_PKG_VERSION")),
-            "Open",
+            Some("Open"),
         ),
     ];
 
@@ -77,15 +83,27 @@ pub fn render(
     egui::Panel::bottom(super::BOTTOM_PANEL_ID).show(root, |ui| {
         ui.add_space(4.0);
         // The row's action, where every other screen puts its buttons.
-        let action = rows[state.cursor.min(rows.len() - 1)].2;
-        super::home::hint_bar(
-            ui,
-            &[
-                ("← →", "Tabs", None),
-                ("A", action, Some(AppCommand::Confirm)),
-            ],
-            taps,
-        );
+        match rows[state.cursor.min(rows.len() - 1)].2 {
+            Some(action) => super::home::hint_bar(
+                ui,
+                &[
+                    ("← →", "Tabs", None),
+                    ("A", action, Some(AppCommand::Confirm)),
+                ],
+                taps,
+            ),
+            // A stepper row spends ◂ ▸ on its own value, so it names them —
+            // and naming them is what lets a screen with no pad reach them.
+            None => super::home::hint_bar(
+                ui,
+                &[
+                    ("◂", "Smaller", Some(AppCommand::Nav(Direction::Left))),
+                    ("▸", "Bigger", Some(AppCommand::Nav(Direction::Right))),
+                    ("L1 R1", "Tabs", None),
+                ],
+                taps,
+            ),
+        }
         ui.add_space(4.0);
     });
 
@@ -139,6 +157,18 @@ fn port_label(configured: u16, actual: u16, dirty: bool) -> String {
         actual.to_string()
     } else {
         format!("{actual} ({configured} was busy)")
+    }
+}
+
+/// The factor as a percentage of the fit the panel itself asked for. 100% is
+/// that fit, which the row spells out — a bare number says nothing about what
+/// it is a percentage of.
+fn scale_label(scale: f32) -> String {
+    let percent = (scale * 100.0).round() as i32;
+    if percent == 100 {
+        "100% — fits this screen".to_string()
+    } else {
+        format!("{percent}%")
     }
 }
 

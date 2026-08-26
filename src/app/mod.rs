@@ -393,8 +393,13 @@ impl App {
 
     /// Nav on a tab: left/right step between tabs the same way L1/R1 do, and
     /// up/down move the active tab's cursor (Receive has nothing to move).
+    /// The exception is a settings row carrying a value — there left/right walk
+    /// the value, and L1/R1 remain the way off the tab.
     fn tab_nav(&mut self, dir: Direction) {
         match dir {
+            Direction::Left | Direction::Right if self.on_stepper_row() => {
+                self.step_scale(if dir == Direction::Left { -1 } else { 1 });
+            }
             Direction::Left => self.switch_tab(-1),
             Direction::Right => self.switch_tab(1),
             Direction::Up | Direction::Down => match self.ui.tabs.active() {
@@ -483,6 +488,19 @@ impl App {
             .or_else(|| (!entry.peer_base.is_empty()).then(|| entry.peer_base.clone()))
     }
 
+    /// Is the cursor on a settings row whose value left/right walk?
+    fn on_stepper_row(&self) -> bool {
+        self.ui.tabs.active() == Tab::Settings && self.ui.settings.row().is_stepper()
+    }
+
+    /// ◂ ▸ on the scale row: nudge the factor over the panel's own fit. The
+    /// zoom follows on the next frame; the config is written on leaving the tab,
+    /// like every other setting here.
+    fn step_scale(&mut self, dir: i32) {
+        let scale = &mut self.config.display.scale;
+        *scale = crate::config::display::SCALE.step(*scale, dir);
+    }
+
     /// A on a settings row: open its editor or toggle it.
     fn edit_setting(&mut self) {
         match self.ui.settings.row() {
@@ -510,6 +528,8 @@ impl App {
                 self.ui.routes.open(auto);
             }
             SettingsRow::About => self.ui.about.open(),
+            // Walked with ◂ ▸; A on it would have to pick a direction.
+            SettingsRow::Scale => {}
             SettingsRow::Port => {
                 self.ui
                     .osk

@@ -128,7 +128,7 @@ hint along the bottom to press the button it names.
 
 | Pad          | Keyboard   | Action                                        |
 |--------------|------------|-----------------------------------------------|
-| D-pad / stick| Arrows     | Navigate · left/right switch tabs             |
+| D-pad / stick| Arrows     | Navigate · left/right switch tabs, or step a settings value |
 | A            | Enter      | Send to device · select file · accept · repeat a send · type |
 | B            | Esc        | Back · decline · cancel · leave the keyboard  |
 | X            | X / Bksp   | Add a device by IP · pick where an incoming transfer lands · delete a history row · erase a character · take every file in the folder |
@@ -147,10 +147,13 @@ Settings screen edits everything in it except:
 - `[transfer] browser_roots` — extra mount points for the file browser
 - `[transfer] history_limit` — max transfers kept in the History tab (default 200)
 - `[transfer] pinned_paths`, `last_send_dir` — written by Y and by sending
+- `[display] scale` — UI size over what the screen itself asks for (0.6–1.6,
+  the "UI scale" setting; every screen is drawn for 640×480 and fitted from there)
 
 Environment variables override paths and control logging at launch:
 `RETSEND_DATA_DIR`, `RETSEND_CONFIG`, `RETSEND_SAVE_DIR`, `RETSEND_BROWSER_ROOTS`
-(`:`-separated), `RETSEND_ALIAS`, `RETSEND_SCALE`, `RETSEND_GLES=0|1`,
+(`:`-separated), `RETSEND_ALIAS`, `RETSEND_SCALE` (pins the base the `[display]
+scale` setting is read over, replacing the fit), `RETSEND_GLES=0|1`,
 `RETSEND_SOFTWARE=1`, `RETSEND_BLIT=1`, `RETSEND_KEYMAP=miyoo|desktop`,
 `RETSEND_LOG_LEVEL`, `RETSEND_LOG_FILE`, `RETSEND_PANIC_FILE`.
 
