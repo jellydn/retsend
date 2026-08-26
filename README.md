@@ -16,7 +16,7 @@
 client for retro handhelds: send and receive files with your phone
 or PC over Wi-Fi, no cable or SSH. Compatible with the official LocalSend apps.
 
-It targets [PortMaster-compatible](https://portmaster.games/supported-devices.html) Linux handhelds and the Miyoo Mini Plus and Flip running OnionOS or Allium, all of which are gamepad-only systems without a compositor. It also runs on regular desktop Linux and on Android handhelds and phones too.
+It targets [PortMaster-compatible](https://portmaster.games/supported-devices.html) Linux handhelds and the Miyoo Mini Plus and Flip running [OnionOS](https://github.com/OnionUI/Onion), [spruceOS](https://github.com/spruceUI/spruceOS) or [Allium](https://github.com/goweiwen/Allium), all of which are gamepad-only systems without a compositor. It also runs on regular desktop Linux and on Android.
 
 <p align="center">
   <img src="resources/retsend-devices.jpg" alt="Three devices on a couch: a handheld showing the radar of nearby devices, a clamshell handheld waiting to receive, and a phone running the official LocalSend app" width="480">
