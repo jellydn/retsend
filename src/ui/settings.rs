@@ -83,27 +83,23 @@ pub fn render(
     egui::Panel::bottom(super::BOTTOM_PANEL_ID).show(root, |ui| {
         ui.add_space(4.0);
         // The row's action, where every other screen puts its buttons.
-        match rows[state.cursor.min(rows.len() - 1)].2 {
-            Some(action) => super::home::hint_bar(
-                ui,
-                &[
-                    ("← →", "Tabs", None),
-                    ("A", action, Some(AppCommand::Confirm)),
-                ],
-                taps,
-            ),
+        let mut hints: Vec<super::home::Hint> = match rows[state.cursor.min(rows.len() - 1)].2 {
+            Some(action) => vec![
+                ("← →", "Tabs", None),
+                ("A", action, Some(AppCommand::Confirm)),
+            ],
             // A stepper row spends ◂ ▸ on its own value, so it names them —
             // and naming them is what lets a screen with no pad reach them.
-            None => super::home::hint_bar(
-                ui,
-                &[
-                    ("◂", "Smaller", Some(AppCommand::Nav(Direction::Left))),
-                    ("▸", "Bigger", Some(AppCommand::Nav(Direction::Right))),
-                    ("L1 R1", "Tabs", None),
-                ],
-                taps,
-            ),
+            None => vec![
+                ("◂", "Smaller", Some(AppCommand::Nav(Direction::Left))),
+                ("▸", "Bigger", Some(AppCommand::Nav(Direction::Right))),
+                ("L1 R1", "Tabs", None),
+            ],
+        };
+        if crate::app::back_quits() {
+            hints.push(("B", "Quit", Some(AppCommand::Back)));
         }
+        super::home::hint_bar(ui, &hints, taps);
         ui.add_space(4.0);
     });
 

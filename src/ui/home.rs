@@ -35,16 +35,16 @@ pub struct HomeData {
 pub fn render(root: &mut egui::Ui, data: &HomeData, taps: &mut Vec<AppCommand>) {
     egui::Panel::bottom(super::BOTTOM_PANEL_ID).show(root, |ui| {
         ui.add_space(4.0);
-        hint_bar(
-            ui,
-            &[
-                ("← →", "Tabs", None),
-                ("Select", "Refresh", Some(AppCommand::ReAnnounce)),
-                ("X", "Add IP", Some(AppCommand::Alt)),
-                ("A", "Choose files", Some(AppCommand::Confirm)),
-            ],
-            taps,
-        );
+        let mut hints: Vec<Hint> = vec![
+            ("← →", "Tabs", None),
+            ("Select", "Refresh", Some(AppCommand::ReAnnounce)),
+            ("X", "Add IP", Some(AppCommand::Alt)),
+            ("A", "Choose files", Some(AppCommand::Confirm)),
+        ];
+        if crate::app::back_quits() {
+            hints.push(("B", "Quit", Some(AppCommand::Back)));
+        }
+        hint_bar(ui, &hints, taps);
         ui.add_space(4.0);
     });
 
