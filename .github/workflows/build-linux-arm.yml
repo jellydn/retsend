@@ -294,15 +294,17 @@ jobs:
           mkdir -p "$app"
           # The same device as the OnionOS package, a different launcher: Allium
           # reads Apps/, and only a folder ending in .pak is an app to it. The
-          # icon and the bundled SDL2 come from the one tree rather than a second
-          # copy that would drift from it.
+          # bundled SDL2 comes from the one tree rather than a second copy that
+          # would drift from it.
           cp allium/Apps/Retsend.pak/config.json allium/Apps/Retsend.pak/launch.sh "$app/"
           # Carried, not installed: copied into Roms/PORTS it puts the app in the
           # Games tab, handing over to this one install.
           cp -r allium/Apps/Retsend.pak/ports "$app/"
           chmod 755 "$app/ports/Retsend.port/launch.sh"
           cp allium/README.md "$app/"
-          cp onionos/App/Retsend/icon.png "$app/"
+          # Allium draws app icons on its own dark list, so it gets the plated
+          # icon rather than the transparent glyph OnionOS themes want.
+          cp resources/icon.png "$app/"
           cp -r onionos/App/Retsend/lib "$app/"
           install -m 755 bin/retsend "$app/retsend"
           chmod 755 "$app/launch.sh"
