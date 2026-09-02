@@ -39,6 +39,8 @@ pub struct FileSlot {
     pub token: String,
     /// Final destination (see [`SaveRouter::dest_for`]).
     pub dest: PathBuf,
+    /// Where the body streams until it is whole (see [`super::files::part_path`]).
+    part: PathBuf,
     pub state: Mutex<FileState>,
     pub received: AtomicU64,
 }
@@ -80,6 +82,9 @@ impl InboundSession {
             by_id.insert(meta.id.clone(), slots.len());
             slots.push(FileSlot {
                 token: protocol::random_token(16),
+                // Its own tag rather than the token, which is a secret and has
+                // no business in a name anyone can list.
+                part: super::files::part_path(&dest, &protocol::random_token(4)),
                 dest,
                 meta,
                 state: Mutex::new(FileState::Pending),
@@ -146,7 +151,7 @@ impl InboundSession {
             }
             Err((status, message)) => {
                 log::warn!("receive `{}` failed: {message}", slot.meta.file_name);
-                let _ = std::fs::remove_file(super::files::part_path(&slot.dest));
+                let _ = std::fs::remove_file(&slot.part);
                 // Roll the totals back so the overall bar doesn't count bytes
                 // of a file that will be reported failed.
                 let received = slot.received.swap(0, Ordering::SeqCst);
@@ -164,22 +169,28 @@ impl InboundSession {
         body: &mut dyn Read,
         wake: &dyn Wake,
     ) -> Result<(), (u16, String)> {
-        let part = super::files::part_path(&slot.dest);
-        let mut file = std::fs::File::create(&part)
+        let part = &slot.part;
+        let mut file = std::fs::File::create(part)
             .map_err(|e| (500, format!("create `{}`: {e}", part.display())))?;
 
         let mut buf = vec![0u8; CHUNK];
-        loop {
+        // Read no further than the declared size: a chunked body has no length
+        // of its own, so an over-long one would otherwise fill the card before
+        // the check below ever ran.
+        let mut left = slot.meta.size;
+        while left > 0 {
             if self.cancelled.load(Ordering::SeqCst) {
                 return Err((409, "session cancelled".to_string()));
             }
-            let n = match body.read(&mut buf) {
+            let want = left.min(CHUNK as u64) as usize;
+            let n = match body.read(&mut buf[..want]) {
                 Ok(0) => break,
                 Ok(n) => n,
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(e) => return Err((500, format!("read body: {e}"))),
             };
             file.write_all(&buf[..n]).map_err(|e| map_write_error(&e))?;
+            left -= n as u64;
             slot.received.fetch_add(n as u64, Ordering::SeqCst);
             self.received_total.fetch_add(n as u64, Ordering::SeqCst);
             self.touch();
@@ -193,11 +204,19 @@ impl InboundSession {
                 format!("size mismatch: got {received}, expected {}", slot.meta.size),
             ));
         }
+        // One byte past the declaration is a sender that lied about the size;
+        // nothing of it is on disk, and taking it as complete would be worse.
+        if body.read(&mut buf[..1]).unwrap_or(0) != 0 {
+            return Err((
+                400,
+                format!("body longer than the declared {} bytes", slot.meta.size),
+            ));
+        }
         // fsync before the rename: an SD yank must not leave a truncated file
         // that looks complete.
         file.sync_all().map_err(|e| map_write_error(&e))?;
         drop(file);
-        std::fs::rename(&part, &slot.dest)
+        std::fs::rename(part, &slot.dest)
             .map_err(|e| (500, format!("rename to `{}`: {e}", slot.dest.display())))?;
         Ok(())
     }
@@ -320,6 +339,94 @@ mod tests {
         assert!(!dir.join("game.gbc.part").exists());
         assert!(session.is_finished());
         assert_eq!(session.done_count(), 1);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A sender may name one file like another's streaming path. Both are
+    /// files it asked us to keep, so neither may be streamed over.
+    #[test]
+    fn a_file_named_like_a_part_path_survives_its_neighbour() {
+        let dir = temp_dir("part-clash");
+        let session = InboundSession::new(
+            "Phone".into(),
+            vec![meta("a", "x.bin.part", 4), meta("b", "x.bin", 4)],
+            &router(&dir),
+        )
+        .unwrap();
+
+        for (id, body) in [("a", &b"AAAA"[..]), ("b", &b"BBBB"[..])] {
+            let token = session.tokens()[id].clone();
+            assert_eq!(
+                session.receive_file(id, &token, &mut &body[..], &NoopWake),
+                200
+            );
+        }
+
+        assert_eq!(std::fs::read(dir.join("x.bin.part")).unwrap(), b"AAAA");
+        assert_eq!(std::fs::read(dir.join("x.bin")).unwrap(), b"BBBB");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The streaming path leaves nothing behind, whatever it was called.
+    #[test]
+    fn a_finished_receive_leaves_no_part_file() {
+        let dir = temp_dir("no-debris");
+        let session =
+            InboundSession::new("Phone".into(), vec![meta("a", "rom.gbc", 2)], &router(&dir))
+                .unwrap();
+        let token = session.tokens()["a"].clone();
+        assert_eq!(
+            session.receive_file("a", &token, &mut &b"hi"[..], &NoopWake),
+            200
+        );
+
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".part"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A body past the declared size is refused, and — the point of it — the
+    /// card never takes the excess: the reader is not drained past the size.
+    #[test]
+    fn a_body_longer_than_declared_is_refused_before_the_card_fills() {
+        /// Serves as much as it is asked for, counting the bytes handed over.
+        struct Endless {
+            served: u64,
+        }
+        impl Read for Endless {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                buf.fill(b'x');
+                self.served += buf.len() as u64;
+                Ok(buf.len())
+            }
+        }
+
+        let dir = temp_dir("overlong");
+        let declared = 4u64;
+        let session = InboundSession::new(
+            "Phone".into(),
+            vec![meta("a", "small.bin", declared)],
+            &router(&dir),
+        )
+        .unwrap();
+        let token = session.tokens()["a"].clone();
+
+        let mut body = Endless { served: 0 };
+        let status = session.receive_file("a", &token, &mut body, &NoopWake);
+
+        assert_eq!(status, 400);
+        // The declared bytes, plus the one byte that proves there are more.
+        assert_eq!(body.served, declared + 1);
+        assert!(!dir.join("small.bin").exists());
+        assert_eq!(session.received_total.load(Ordering::SeqCst), 0);
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

@@ -22,6 +22,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resend walks it again and picks up whatever is in there now. `retsend <path>`
   takes a folder too.
 
+### Fixed
+
+- **A received file named like another's temporary path was destroyed by it.**
+  A file streams into a sibling path until it is whole, and that path was the
+  destination plus `.part` — so a transfer carrying both `game.gbc` and
+  `game.gbc.part` had the first stream over the second, answer 200 for both, and
+  leave one of them gone. Sending a folder holding leftover `.part` debris was
+  enough to hit it. The streaming path now carries a tag of its own.
+- **A sender could fill the card by lying about a file's size.** The body was
+  read to its end and only then measured, and a chunked body declares no length,
+  so one upload could write until the card was full before being refused. Reads
+  now stop at the declared size and a longer body is turned away with nothing of
+  it kept.
+- **A peer's device name is clamped before it is drawn.** Names arrive from the
+  network and every screen shows them: a 64 KB one cost 85 ms of text layout per
+  frame — seconds on a handheld, and exactly while the incoming-request modal
+  waits for an answer — and newlines in one let a sender write extra lines into
+  that modal. Names are capped and stripped of control characters where they
+  enter, and the modal lists the names files will land under rather than the
+  ones the sender wrote.
+
 ## [0.8.0] - 2026-08-26
 
 ### Changed

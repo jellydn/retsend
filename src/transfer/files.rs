@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Longest allowed name in bytes — comfortably under every filesystem's 255
-/// while leaving room for the ` (N)` collision suffix and `.part`.
+/// while leaving room for the ` (N)` collision suffix and `.<tag>.part`.
 const MAX_NAME_BYTES: usize = 200;
 /// Of which the extension may take at most this, leaving the stem a budget.
 const MAX_EXT_BYTES: usize = 20;
@@ -293,10 +293,13 @@ pub fn sweep_stale_parts(dir: &Path) {
     }
 }
 
-/// Sibling `.part` path the file streams into before the final rename.
-pub fn part_path(path: &Path) -> PathBuf {
+/// Sibling path the file streams into before the final rename. `tag` is the
+/// slot's own, so the path can never be another file's destination — a sender
+/// naming one file `x` and another `x.part` would otherwise have the first
+/// stream over the second.
+pub fn part_path(path: &Path, tag: &str) -> PathBuf {
     let mut os = path.as_os_str().to_os_string();
-    os.push(".part");
+    os.push(format!(".{tag}.part"));
     PathBuf::from(os)
 }
 
@@ -642,10 +645,17 @@ mod tests {
     }
 
     #[test]
-    fn part_path_appends_suffix() {
+    fn part_path_appends_a_tagged_suffix() {
         assert_eq!(
-            part_path(Path::new("/save/game.gbc")),
-            PathBuf::from("/save/game.gbc.part")
+            part_path(Path::new("/save/game.gbc"), "a1b2c3d4"),
+            PathBuf::from("/save/game.gbc.a1b2c3d4.part")
+        );
+        // Still `.part`, so `sweep_stale_parts` keeps finding the debris.
+        assert_eq!(
+            part_path(Path::new("/save/game.gbc"), "a1b2c3d4")
+                .extension()
+                .unwrap(),
+            "part"
         );
     }
 }

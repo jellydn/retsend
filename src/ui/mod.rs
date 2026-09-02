@@ -501,11 +501,19 @@ fn prompt_data(net: &NetService) -> Option<prompt::PromptData> {
     let elapsed = p.received_at.elapsed().as_secs_f32();
     Some(prompt::PromptData {
         sender: p.sender.alias.clone(),
+        // The name as it will land, not as the sender wrote it: a raw one
+        // carries whatever length and newlines the sender chose.
         files: p
             .files
             .iter()
             .take(prompt::SHOWN_FILES)
-            .map(|f| (f.file_name.clone(), f.size))
+            .map(|f| {
+                let landing = crate::transfer::files::sanitize_relative_path(&f.file_name);
+                (
+                    truncate_middle(&landing.display().to_string(), PATH_CHARS),
+                    f.size,
+                )
+            })
             .collect(),
         hidden: p.files.len().saturating_sub(prompt::SHOWN_FILES),
         count: p.files.len(),

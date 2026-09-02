@@ -260,6 +260,8 @@ fn handle_prepare_upload<S: Read + Write>(
     else {
         return httpd::respond_empty(reader.get_mut(), 400);
     };
+    // The sender's own name reaches the modal and the transfer screen.
+    let sender = prepare.info.clamped();
     let mut files: Vec<protocol::FileMeta> = prepare.files.into_values().collect();
     if files.is_empty() {
         return httpd::respond_empty(reader.get_mut(), 400);
@@ -289,7 +291,7 @@ fn handle_prepare_upload<S: Read + Write>(
     let router_for = |dir: PathBuf| crate::transfer::route::SaveRouter::new(dir, &settings);
     if settings.auto_accept {
         let router = router_for(settings.save_dir.clone());
-        return start_session(reader.get_mut(), shared, prepare.info, files, &router);
+        return start_session(reader.get_mut(), shared, sender, files, &router);
     }
 
     let dests =
@@ -302,7 +304,7 @@ fn handle_prepare_upload<S: Read + Write>(
             return httpd::respond_empty(reader.get_mut(), 409);
         }
         *pending = Some(PendingRequest {
-            sender: prepare.info.clone(),
+            sender: sender.clone(),
             files: files.clone(),
             total_bytes,
             dests,
@@ -321,7 +323,7 @@ fn handle_prepare_upload<S: Read + Write>(
     match decision {
         Ok(Decision::Accept { save_dir }) => {
             let router = router_for(save_dir);
-            start_session(reader.get_mut(), shared, prepare.info, files, &router)
+            start_session(reader.get_mut(), shared, sender, files, &router)
         }
         // A folder chosen for this request is the whole answer to "where":
         // no routes, no auto routes, everything lands there.
@@ -331,7 +333,7 @@ fn handle_prepare_upload<S: Read + Write>(
                 settings.overwrite,
                 settings.keep_folders,
             );
-            start_session(reader.get_mut(), shared, prepare.info, files, &router)
+            start_session(reader.get_mut(), shared, sender, files, &router)
         }
         Ok(Decision::Decline) | Err(_) => httpd::respond_empty(reader.get_mut(), 403),
     }

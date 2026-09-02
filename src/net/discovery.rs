@@ -79,6 +79,9 @@ impl PeerRegistry {
     }
 
     fn insert(&self, info: DeviceInfo, ip: IpAddr, port: u16, manual: bool) -> bool {
+        // The one gate every stored peer passes: the names are a peer's to
+        // choose and every screen draws them.
+        let info = info.clamped();
         let mut peers = self.peers.lock().unwrap();
         let existing = peers.get(&info.fingerprint);
         let changed = match existing {
@@ -364,6 +367,37 @@ mod tests {
         registry.upsert(info("typed", Some(53317)), ip);
         age_out(&registry, "typed");
         assert_eq!(registry.snapshot().len(), 1);
+    }
+
+    /// Every stored peer passes the clamp, whichever way it arrived — the
+    /// radar draws these names, and a peer picks them.
+    #[test]
+    fn a_stored_peers_name_is_clamped() {
+        let registry = PeerRegistry::new();
+        let ip = IpAddr::from([192, 168, 1, 5]);
+        let mut flood = info("heard", Some(53317));
+        flood.alias = "A".repeat(64 * 1024);
+        flood.device_model = Some("M\nM".into());
+        registry.upsert(flood, ip);
+
+        let mut typed = info("typed", None);
+        typed.alias = "B".repeat(1000);
+        registry.upsert_manual(typed, ip, 53318);
+
+        for peer in registry.snapshot() {
+            assert!(
+                peer.info.alias.chars().count() <= 48,
+                "{}",
+                peer.info.alias.len()
+            );
+            assert!(!peer.info.alias.contains('\n'));
+        }
+        let heard = registry
+            .snapshot()
+            .into_iter()
+            .find(|p| p.info.fingerprint == "heard")
+            .expect("peer was inserted");
+        assert_eq!(heard.info.device_model.as_deref(), Some("M M"));
     }
 
     #[test]

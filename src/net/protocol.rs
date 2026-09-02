@@ -40,6 +40,38 @@ pub struct DeviceInfo {
     pub announce: Option<bool>,
 }
 
+/// Longest peer-supplied name we keep. A device name is a few words; past this
+/// it is a peer costing us a text layout per frame (64 KB measured at 85 ms).
+const MAX_PEER_NAME_CHARS: usize = 48;
+/// Stands in for a name that arrives empty, so a row is never blank.
+const UNNAMED: &str = "unknown";
+
+/// A peer-supplied name fit to store and to draw: control characters — which
+/// would otherwise let a sender add lines to our own dialogs — become spaces,
+/// and the length is capped.
+pub fn clamp_peer_name(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(MAX_PEER_NAME_CHARS)
+        .collect();
+    let trimmed = cleaned.trim();
+    if trimmed.is_empty() {
+        return UNNAMED.to_string();
+    }
+    trimmed.to_string()
+}
+
+impl DeviceInfo {
+    /// The identity with the names a peer chose clamped — apply once, where a
+    /// peer's info enters (the registry, prepare-upload), so no screen has to.
+    pub fn clamped(mut self) -> Self {
+        self.alias = clamp_peer_name(&self.alias);
+        self.device_model = self.device_model.as_deref().map(clamp_peer_name);
+        self
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct FileMeta {
@@ -111,6 +143,45 @@ mod tests {
         assert_eq!(d.port, Some(53317));
         assert_eq!(d.protocol.as_deref(), Some("https"));
         assert_eq!(d.announce, Some(true));
+    }
+
+    #[test]
+    fn a_peer_name_keeps_what_a_device_name_needs() {
+        assert_eq!(clamp_peer_name("Nice Orange"), "Nice Orange");
+        // Emoji and non-latin names are names too.
+        assert_eq!(clamp_peer_name("Максим's Pixel 📱"), "Максим's Pixel 📱");
+        assert_eq!(clamp_peer_name("  padded  "), "padded");
+    }
+
+    /// The flood and the injection: a name is capped, and control characters
+    /// cannot add lines to a dialog that quotes it.
+    #[test]
+    fn a_peer_name_is_capped_and_stripped_of_control_characters() {
+        let flood = clamp_peer_name(&"A".repeat(64 * 1024));
+        assert_eq!(flood.chars().count(), MAX_PEER_NAME_CHARS);
+
+        let injected = clamp_peer_name("Phone\n\nAccept to continue");
+        assert!(!injected.contains('\n'), "{injected}");
+        assert_eq!(injected, "Phone  Accept to continue");
+
+        // A name that is nothing but control characters still leaves a row.
+        assert_eq!(clamp_peer_name("\n\t\0"), UNNAMED);
+        assert_eq!(clamp_peer_name(""), UNNAMED);
+    }
+
+    #[test]
+    fn clamping_covers_every_name_a_peer_chooses() {
+        let hostile = DeviceInfo {
+            alias: "\n".to_string() + &"A".repeat(1000),
+            device_model: Some("M".repeat(1000)),
+            ..serde_json::from_str::<DeviceInfo>(OFFICIAL_ANNOUNCE).unwrap()
+        }
+        .clamped();
+        assert_eq!(hostile.alias.chars().count(), MAX_PEER_NAME_CHARS - 1);
+        assert_eq!(
+            hostile.device_model.as_deref().map(str::len),
+            Some(MAX_PEER_NAME_CHARS)
+        );
     }
 
     /// Minimal message: only the required fields. Forks omit the rest.
