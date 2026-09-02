@@ -414,9 +414,9 @@ dependencies = [
 
 [[package]]
 name = "egui-sdl2"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d77893b58b5185d6a62439b486b2871c38c9cb154a1d5506baef4d7d8275580"
+checksum = "46b4eea5aa7442d0d14a6baf7606a2cd5a3f2d0b4d53e4ac33ec392edbb87939"
 dependencies = [
  "bytemuck",
  "egui",
