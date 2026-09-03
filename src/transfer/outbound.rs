@@ -15,6 +15,10 @@ pub use super::inbound::FileState;
 
 /// Progress wakes are throttled to one per this interval.
 const NOTIFY_EVERY: Duration = Duration::from_millis(250);
+/// Tries per file when the network — not the peer — breaks the upload off.
+/// Handheld wifi drops a connection now and again; the receiver takes the
+/// file again from the start.
+const UPLOAD_ATTEMPTS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum OutboundPhase {
@@ -189,25 +193,15 @@ fn run(session: Arc<OutboundSession>, me: DeviceInfo, wake: Arc<dyn Wake>) {
         }
         *file.state.lock().unwrap() = FileState::Receiving; // "in flight"
 
-        let result = std::fs::File::open(&file.path)
-            .map_err(|e| format!("open `{}`: {e}", file.path.display()))
-            .and_then(|inner| {
-                let mut reader = ProgressReader {
-                    inner,
-                    session: &session,
-                    file,
-                    wake: wake.as_ref(),
-                };
-                client::upload_file(
-                    &agent,
-                    base,
-                    &response.session_id,
-                    &file.meta.id,
-                    token,
-                    &mut reader,
-                    file.meta.size,
-                )
-            });
+        let result = send_file(
+            &session,
+            &agent,
+            base,
+            &response.session_id,
+            token,
+            file,
+            &wake,
+        );
         match result {
             Ok(()) => *file.state.lock().unwrap() = FileState::Done,
             Err(message) => {
@@ -237,10 +231,75 @@ fn run(session: Arc<OutboundSession>, me: DeviceInfo, wake: Arc<dyn Wake>) {
     }
 }
 
+/// Upload one file, once more if the network — not the peer — broke it off.
+/// The size was announced in prepare-upload and the receiver holds us to it, so
+/// a file that changed since the walk is reported rather than sent short.
+fn send_file(
+    session: &Arc<OutboundSession>,
+    agent: &ureq::Agent,
+    base: &str,
+    session_id: &str,
+    token: &str,
+    file: &OutboundFile,
+    wake: &Arc<dyn Wake>,
+) -> Result<(), String> {
+    let on_disk = std::fs::metadata(&file.path)
+        .map_err(|e| format!("open `{}`: {e}", file.path.display()))?
+        .len();
+    if on_disk != file.meta.size {
+        return Err(format!(
+            "changed since it was picked: {on_disk} bytes now, {} announced",
+            file.meta.size
+        ));
+    }
+
+    let mut attempt = 1;
+    loop {
+        let handle = std::fs::File::open(&file.path)
+            .map_err(|e| format!("open `{}`: {e}", file.path.display()))?;
+        let mut reader = ProgressReader {
+            // Bounded: a file growing under us must not overrun the length we
+            // announced, which would leave the peer reading into the next reply.
+            inner: handle.take(file.meta.size),
+            session,
+            file,
+            wake: wake.as_ref(),
+        };
+        let result = client::upload_file(
+            agent,
+            base,
+            session_id,
+            &file.meta.id,
+            token,
+            &mut reader,
+            file.meta.size,
+        );
+        match result {
+            Ok(()) => return Ok(()),
+            // The peer answered, so it has made up its mind.
+            Err(e @ client::UploadError::Status(_)) => return Err(e.to_string()),
+            Err(e) => {
+                if attempt >= UPLOAD_ATTEMPTS || session.cancel.load(Ordering::SeqCst) {
+                    return Err(e.to_string());
+                }
+                log::warn!(
+                    "upload `{}` broke off ({e}); trying again",
+                    file.meta.file_name
+                );
+                // The peer keeps nothing of a failed slot, so the retry starts
+                // the file over — and so must its share of the bar.
+                let sent = file.sent.swap(0, Ordering::SeqCst);
+                session.sent_total.fetch_sub(sent, Ordering::SeqCst);
+                attempt += 1;
+            }
+        }
+    }
+}
+
 /// Wraps the file being uploaded: counts bytes into the progress atomics,
 /// throttle-wakes the UI, and aborts the request when the user cancels.
 struct ProgressReader<'a> {
-    inner: std::fs::File,
+    inner: std::io::Take<std::fs::File>,
     session: &'a OutboundSession,
     file: &'a OutboundFile,
     wake: &'a dyn Wake,

@@ -267,23 +267,47 @@ fn walk_into(dir: &Path, prefix: &str, depth: usize, list: &mut SendList) {
     }
 }
 
-/// Remove leftover `.part` files older than a day from `dir` — debris from
-/// crashes or yanked power mid-transfer. Fresh ones are left alone in case a
+/// Remove leftover `.part` files older than a day from `dir` and the folders
+/// under it — debris from crashes or yanked power mid-transfer, which a folder
+/// transfer leaves a level or more down. Fresh ones are left alone in case a
 /// transfer is somehow still running. Called once at startup, best-effort.
 pub fn sweep_stale_parts(dir: &Path) {
-    const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+    let mut budget = MAX_SWEEP_DIRS;
+    sweep_into(dir, 1, &mut budget);
+}
+
+/// Debris older than this is nobody's transfer.
+const MAX_SWEEP_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+/// As deep as a received folder can go, and so as deep as its debris.
+const MAX_SWEEP_DEPTH: usize = MAX_DEPTH;
+/// Directories one sweep may open. A save directory is a card's ROM tree —
+/// thousands of folders — and this runs before the first frame.
+const MAX_SWEEP_DIRS: usize = 512;
+
+fn sweep_into(dir: &Path, depth: usize, budget: &mut usize) {
+    if *budget == 0 {
+        return;
+    }
+    *budget -= 1;
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() && depth < MAX_SWEEP_DEPTH {
+            sweep_into(&path, depth + 1, budget);
+            continue;
+        }
         let is_part = path.extension().is_some_and(|e| e == "part");
         let stale = entry
             .metadata()
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.elapsed().ok())
-            .is_some_and(|age| age > MAX_AGE);
+            .is_some_and(|age| age > MAX_SWEEP_AGE);
         if is_part && stale {
             match std::fs::remove_file(&path) {
                 Ok(()) => log::info!("swept stale `{}`", path.display()),
@@ -642,6 +666,43 @@ mod tests {
         assert!(!is_inside(dir, dir), "a folder does not contain itself");
         assert!(!is_inside(dir, Path::new("/roms/gba/x.gba")));
         assert!(!is_inside(dir, Path::new("/roms")));
+    }
+
+    /// Debris a folder transfer left a level down must be swept too, and a
+    /// fresh `.part` — a transfer that may still be running — must not be.
+    #[test]
+    fn the_sweep_reaches_debris_in_subfolders() {
+        let root = std::env::temp_dir().join(format!(
+            "retsend-sweep-{}",
+            crate::net::protocol::random_token(4)
+        ));
+        let nested = root.join("Zelda/saves");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let stale = [
+            root.join("top.gbc.aabbccdd.part"),
+            nested.join("deep.sav.11223344.part"),
+        ];
+        for path in &stale {
+            std::fs::write(path, b"x").unwrap();
+            let old = std::time::SystemTime::now() - MAX_SWEEP_AGE * 2;
+            let file = std::fs::File::options().write(true).open(path).unwrap();
+            file.set_modified(old).unwrap();
+        }
+        let fresh = nested.join("running.sav.55667788.part");
+        std::fs::write(&fresh, b"x").unwrap();
+        let keeper = nested.join("keep.sav");
+        std::fs::write(&keeper, b"x").unwrap();
+
+        sweep_stale_parts(&root);
+
+        for path in &stale {
+            assert!(!path.exists(), "left behind: {}", path.display());
+        }
+        assert!(fresh.exists(), "a fresh part may still be in use");
+        assert!(keeper.exists(), "swept something that was not debris");
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

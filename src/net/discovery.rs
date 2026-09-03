@@ -21,6 +21,15 @@ use std::time::{Duration, Instant};
 const PEER_TTL: Duration = Duration::from_secs(120);
 /// Announce datagrams are small JSON; anything bigger is not for us.
 const MAX_PACKET: usize = 64 * 1024;
+/// Most peers kept at once. A network has a handful; a flood of made-up
+/// fingerprints would otherwise grow the registry — and the radar — without end.
+const MAX_PEERS: usize = 64;
+/// One register-reply per peer per this long. A reply costs a thread and an
+/// HTTP round trip, and an announcer that repeats itself (the spec's own client
+/// bursts at startup) needs only the first.
+const REPLY_EVERY: Duration = Duration::from_secs(5);
+/// Fingerprints tracked for [`REPLY_EVERY`] before the stale ones are dropped.
+const MAX_REPLY_TRACKED: usize = 256;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
@@ -83,6 +92,15 @@ impl PeerRegistry {
         // choose and every screen draws them.
         let info = info.clamped();
         let mut peers = self.peers.lock().unwrap();
+        if !peers.contains_key(&info.fingerprint) && peers.len() >= MAX_PEERS {
+            // Full of peers, so make room the honest way before refusing: a
+            // hand-typed one is nobody's to evict.
+            peers.retain(|_, p| p.manual || p.last_seen.elapsed() < PEER_TTL);
+            if peers.len() >= MAX_PEERS {
+                log::warn!("{MAX_PEERS} peers already known; ignoring `{}`", info.alias);
+                return false;
+            }
+        }
         let existing = peers.get(&info.fingerprint);
         let changed = match existing {
             Some(p) => p.info.alias != info.alias || p.ip != ip || p.port != port,
@@ -198,6 +216,9 @@ pub fn spawn_listener(shared: Arc<NetShared>) -> std::io::Result<JoinHandle<()>>
         .name("discovery".into())
         .spawn(move || {
             let mut buf = vec![0u8; MAX_PACKET];
+            // Local to this thread: nobody else decides who was answered when.
+            let mut replied: std::collections::HashMap<String, Instant> =
+                std::collections::HashMap::new();
             loop {
                 if shared.shutdown.load(Ordering::SeqCst) {
                     return;
@@ -233,11 +254,36 @@ pub fn spawn_listener(shared: Arc<NetShared>) -> std::io::Result<JoinHandle<()>>
                     log::info!("discovered `{}` at {}", info.alias, src.ip());
                     shared.wake.wake(WakeReason::Peers);
                 }
-                if wants_reply {
+                if wants_reply && due_a_reply(&mut replied, &info.fingerprint) {
                     reply_to_announce(&shared, info, src.ip());
                 }
             }
         })
+}
+
+/// Whether `fingerprint` is owed a register-reply, remembering that it was.
+/// Without this a peer announcing in a loop — or flooding on purpose — gets a
+/// thread and an HTTP round trip per datagram.
+fn due_a_reply(
+    replied: &mut std::collections::HashMap<String, Instant>,
+    fingerprint: &str,
+) -> bool {
+    if replied
+        .get(fingerprint)
+        .is_some_and(|at| at.elapsed() < REPLY_EVERY)
+    {
+        return false;
+    }
+    if replied.len() >= MAX_REPLY_TRACKED {
+        replied.retain(|_, at| at.elapsed() < REPLY_EVERY);
+        // Still full: that many strangers inside one interval is a flood, not a
+        // network. Answering it is what would cost us.
+        if replied.len() >= MAX_REPLY_TRACKED {
+            return false;
+        }
+    }
+    replied.insert(fingerprint.to_string(), Instant::now());
+    true
 }
 
 fn bind_multicast(port: u16) -> std::io::Result<UdpSocket> {
@@ -398,6 +444,45 @@ mod tests {
             .find(|p| p.info.fingerprint == "heard")
             .expect("peer was inserted");
         assert_eq!(heard.info.device_model.as_deref(), Some("M M"));
+    }
+
+    /// A peer that repeats itself gets one reply per interval, and a flood of
+    /// strangers gets none — a reply is a thread and an HTTP round trip.
+    #[test]
+    fn replies_are_owed_once_per_interval() {
+        let mut replied = std::collections::HashMap::new();
+        assert!(due_a_reply(&mut replied, "peer"));
+        assert!(!due_a_reply(&mut replied, "peer"), "answered twice");
+        assert!(due_a_reply(&mut replied, "another"));
+
+        // Its turn comes round again once the interval has passed.
+        replied.insert("peer".to_string(), Instant::now() - REPLY_EVERY * 2);
+        assert!(due_a_reply(&mut replied, "peer"));
+
+        for i in 0..MAX_REPLY_TRACKED {
+            due_a_reply(&mut replied, &format!("flood{i}"));
+        }
+        assert!(replied.len() <= MAX_REPLY_TRACKED, "{}", replied.len());
+        assert!(!due_a_reply(&mut replied, "one-more-stranger"));
+    }
+
+    /// The registry is bounded, and a hand-typed peer is never what gets
+    /// dropped to make room.
+    #[test]
+    fn the_registry_stops_at_a_ceiling() {
+        let registry = PeerRegistry::new();
+        let ip = IpAddr::from([192, 168, 1, 5]);
+        registry.upsert_manual(info("typed", None), ip, 53317);
+        for i in 0..MAX_PEERS * 2 {
+            registry.upsert(info(&format!("flood{i}"), Some(53317)), ip);
+        }
+
+        let peers = registry.snapshot();
+        assert!(peers.len() <= MAX_PEERS, "{}", peers.len());
+        assert!(
+            peers.iter().any(|p| p.info.fingerprint == "typed"),
+            "the manual peer was evicted"
+        );
     }
 
     #[test]

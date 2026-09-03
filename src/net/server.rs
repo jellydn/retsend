@@ -21,6 +21,11 @@ const MAX_JSON_BODY: u64 = 64 * 1024;
 /// `/prepare-upload` carries metadata for every file — allow big batches.
 const MAX_PREPARE_BODY: u64 = 1024 * 1024;
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
+/// Connection threads allowed at once. The flow needs a handful — a parked
+/// prepare-upload plus a file per parallel upload — while a scanner or a
+/// hostile peer would otherwise take a thread per connection until the device
+/// ran out of them.
+pub const MAX_CONNECTIONS: usize = 32;
 /// How long a prepare-upload waits for the user before declining. The
 /// official app's own dialog waits about this long.
 pub const DECISION_TIMEOUT: Duration = Duration::from_secs(60);
@@ -71,6 +76,28 @@ impl PendingRequest {
 
     pub fn decline(self) {
         let _ = self.decision_tx.send(Decision::Decline);
+    }
+}
+
+/// One live connection's place in the [`MAX_CONNECTIONS`] budget, returned on
+/// drop — so a handler that panics gives its slot back too.
+struct ConnectionSlot(Arc<std::sync::atomic::AtomicUsize>);
+
+impl ConnectionSlot {
+    /// A slot, or `None` when the budget is spent.
+    fn take(live: &Arc<std::sync::atomic::AtomicUsize>) -> Option<Self> {
+        let taken = live.fetch_add(1, Ordering::SeqCst);
+        if taken >= MAX_CONNECTIONS {
+            live.fetch_sub(1, Ordering::SeqCst);
+            return None;
+        }
+        Some(Self(live.clone()))
+    }
+}
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -136,10 +163,11 @@ pub fn spawn(
     let port = listener.local_addr()?.port();
     log::info!("http server listening on 0.0.0.0:{port}");
 
+    let live = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let handle = std::thread::Builder::new()
         .name("http-accept".into())
         .spawn(move || loop {
-            let (stream, peer_addr) = match listener.accept() {
+            let (mut stream, peer_addr) = match listener.accept() {
                 Ok(c) => c,
                 Err(e) => {
                     log::warn!("accept failed: {e}");
@@ -151,11 +179,24 @@ pub fn spawn(
             if shared.shutdown.load(Ordering::SeqCst) {
                 return;
             }
+            let Some(slot) = ConnectionSlot::take(&live) else {
+                log::warn!("{MAX_CONNECTIONS} connections already live; turning {peer_addr} away");
+                // Plain HTTP gets the courtesy of a status; under TLS the
+                // handshake hasn't happened, so there is nothing it could read.
+                if tls.is_none() {
+                    let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
+                    let _ = httpd::respond_empty(&mut stream, 429);
+                }
+                continue;
+            };
             let shared = shared.clone();
             let tls = tls.clone();
             let spawned = std::thread::Builder::new()
                 .name(format!("http-{peer_addr}"))
-                .spawn(move || handle_connection(stream, &shared, tls));
+                .spawn(move || {
+                    let _slot = slot;
+                    handle_connection(stream, &shared, tls)
+                });
             if let Err(e) = spawned {
                 log::warn!("could not spawn connection thread: {e}");
             }
@@ -267,7 +308,9 @@ fn handle_prepare_upload<S: Read + Write>(
         return httpd::respond_empty(reader.get_mut(), 400);
     }
     files.sort_by(|a, b| a.file_name.cmp(&b.file_name));
-    let total_bytes = files.iter().map(|f| f.size).sum();
+    let total_bytes = files
+        .iter()
+        .fold(0u64, |total, f| total.saturating_add(f.size));
 
     // One transfer at a time: while we're sending, don't also receive.
     if shared.outbound_active.load(Ordering::SeqCst) {

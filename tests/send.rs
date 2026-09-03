@@ -287,3 +287,50 @@ fn missing_source_file_fails_to_spawn() {
     assert!(result.is_err());
     stop();
 }
+
+/// The size travels in prepare-upload and the receiver holds the body to it, so
+/// a file that changed while the peer was deciding must be reported, not sent
+/// short — a save an emulator is still writing is the everyday case.
+#[test]
+fn a_file_that_changed_since_the_walk_is_reported() {
+    let (shared, base, save_dir, stop) = start_receiver(false);
+
+    let src = temp_dir("changed");
+    let path = src.join("save.dat");
+    std::fs::write(&path, b"FOUR").unwrap();
+
+    let session = outbound::spawn(
+        "Receiver".into(),
+        base,
+        device("Sender"),
+        vec![path.clone()],
+        Arc::new(NoopWake),
+    )
+    .unwrap();
+
+    // Parked on the receiver's decision: the window a real transfer has too.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let pending = loop {
+        if let Some(pending) = shared.pending.lock().unwrap().take() {
+            break pending;
+        }
+        assert!(Instant::now() < deadline, "prepare never arrived");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    std::fs::write(&path, b"LONGER THAN FOUR").unwrap();
+    pending.accept(save_dir.clone());
+
+    assert_eq!(wait_finished(&session), OutboundPhase::Done);
+    let state = session.files[0].state.lock().unwrap().clone();
+    match state {
+        retsend::transfer::inbound::FileState::Failed(message) => {
+            assert!(message.contains("changed since it was picked"), "{message}");
+        }
+        other => panic!("expected a reported failure, got {other:?}"),
+    }
+    // Nothing half-written landed under the name.
+    assert!(!save_dir.join("save.dat").exists());
+
+    std::fs::remove_dir_all(&src).unwrap();
+    stop();
+}

@@ -42,6 +42,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that modal. Names are capped and stripped of control characters where they
   enter, and the modal lists the names files will land under rather than the
   ones the sender wrote.
+- **Nothing on the network can spend the device without limit any more.** A
+  connection took a thread and an announce took a thread, both without a
+  ceiling, so a scanner or a flood could have as many as it asked for; a peer
+  registry keyed by a peer-chosen fingerprint grew the same way. There are now
+  32 connection threads at once (past that a caller gets 429), one reply per
+  announcing peer per 5 s, and 64 peers — of which a hand-typed one is never
+  what gets dropped to make room.
+- **A send survives a blip and a file that moved under it.** A file whose size
+  changed since it was picked is reported rather than sent short — the size
+  travelled in prepare-upload and the receiver holds the body to it — the body
+  is bounded at that size, and an upload the network breaks off is tried once
+  more. A peer's session id is escaped into our own URLs.
+- Smaller: `.part` debris is swept from the folders a transfer created, not just
+  the top of the save directory; a sender's declared sizes are summed
+  saturatingly; two disagreeing `Content-Length` headers are refused rather than
+  guessed at; and a `+` in a path stays a plus.
 
 ## [0.8.0] - 2026-08-26
 

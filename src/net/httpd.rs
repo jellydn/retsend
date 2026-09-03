@@ -91,15 +91,16 @@ pub fn parse_request(reader: &mut impl BufRead) -> Result<Request, ParseError> {
         Some((p, q)) => (p, Some(q)),
         None => (target, None),
     };
-    let path = percent_decode(raw_path)
+    // A `+` in a path is a plus; only a query string spells space that way.
+    let path = percent_decode(raw_path, false)
         .ok_or_else(|| ParseError::new(400, "bad percent-encoding in path"))?;
     let mut query = Vec::new();
     if let Some(raw) = raw_query {
         for pair in raw.split('&').filter(|p| !p.is_empty()) {
             let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-            let k = percent_decode(k)
+            let k = percent_decode(k, true)
                 .ok_or_else(|| ParseError::new(400, "bad percent-encoding in query"))?;
-            let v = percent_decode(v)
+            let v = percent_decode(v, true)
                 .ok_or_else(|| ParseError::new(400, "bad percent-encoding in query"))?;
             query.push((k, v));
         }
@@ -150,14 +151,22 @@ pub fn parse_request(reader: &mut impl BufRead) -> Result<Request, ParseError> {
             ));
         }
     }
-    // RFC 9112: a Content-Length sent beside chunked framing is ignored.
-    if let Some(v) = request
-        .header("content-length")
-        .filter(|_| !request.chunked)
-    {
-        request.content_length = v
-            .parse::<u64>()
-            .map_err(|_| ParseError::new(400, format!("bad content-length `{v}`")))?;
+    // RFC 9112: a Content-Length sent beside chunked framing is ignored, and
+    // two that disagree are a request we must not guess the framing of.
+    if !request.chunked {
+        let mut lengths = request
+            .headers
+            .iter()
+            .filter(|(name, _)| name == "content-length")
+            .map(|(_, v)| v.as_str());
+        if let Some(first) = lengths.next() {
+            if lengths.any(|other| other != first) {
+                return Err(ParseError::new(400, "conflicting content-length headers"));
+            }
+            request.content_length = first
+                .parse::<u64>()
+                .map_err(|_| ParseError::new(400, format!("bad content-length `{first}`")))?;
+        }
     }
     request.expects_continue = request
         .header("expect")
@@ -361,9 +370,10 @@ fn read_line(reader: &mut impl BufRead, max: usize) -> std::io::Result<String> {
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "non-UTF8 line"))
 }
 
-/// `%XX` decoding (plus `+` as space, the form-encoding convention query
-/// strings use). `None` on truncated/invalid escapes.
-fn percent_decode(s: &str) -> Option<String> {
+/// `%XX` decoding. `plus_is_space` follows the form-encoding convention a
+/// query string uses, which a path does not. `None` on truncated/invalid
+/// escapes.
+fn percent_decode(s: &str, plus_is_space: bool) -> Option<String> {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -375,7 +385,7 @@ fn percent_decode(s: &str) -> Option<String> {
                 out.push((hi * 16 + lo) as u8);
                 i += 3;
             }
-            b'+' => {
+            b'+' if plus_is_space => {
                 out.push(b' ');
                 i += 1;
             }
@@ -488,6 +498,27 @@ mod tests {
     fn missing_content_length_means_empty_body() {
         let req = parse("GET /api/localsend/v2/info HTTP/1.1\r\n\r\n").unwrap();
         assert_eq!(req.content_length, 0);
+    }
+
+    /// Two lengths that disagree leave the body's end ambiguous; guessing is
+    /// how a request gets smuggled past a parser.
+    #[test]
+    fn conflicting_content_lengths_get_400() {
+        let err = parse("POST /x HTTP/1.1\r\nContent-Length: 5\r\nContent-Length: 9\r\n\r\n")
+            .unwrap_err();
+        assert_eq!(err.status, 400);
+        // Repeated but agreeing is merely redundant.
+        let req =
+            parse("POST /x HTTP/1.1\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\n").unwrap();
+        assert_eq!(req.content_length, 5);
+    }
+
+    /// `+` is a space in a query string and a plus everywhere else.
+    #[test]
+    fn a_plus_survives_a_path() {
+        let req = parse("GET /api/c++?q=a+b HTTP/1.1\r\n\r\n").unwrap();
+        assert_eq!(req.path, "/api/c++");
+        assert_eq!(req.query_param("q"), Some("a b"));
     }
 
     #[test]

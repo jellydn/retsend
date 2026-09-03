@@ -884,3 +884,29 @@ fn a_chosen_folder_takes_the_files_whatever_the_routes_say() {
     assert!(!save_dir.join("gb").exists(), "the route must not apply");
     stop();
 }
+
+/// Past the connection ceiling the server turns a caller away rather than
+/// spawning a thread for it. The held sockets send nothing, so their handlers
+/// sit in `parse_request` and keep their slots.
+#[test]
+fn a_flood_of_connections_is_turned_away() {
+    let (_shared, port, stop) = start_server(true);
+
+    let held: Vec<TcpStream> = (0..server::MAX_CONNECTIONS)
+        .map(|_| TcpStream::connect(("127.0.0.1", port)).expect("connects"))
+        .collect();
+    // Every slot is spoken for; the next caller gets a status, not a thread.
+    let (status, _) = get(port, "/api/localsend/v2/info");
+    assert_eq!(status, 429);
+
+    // A slot given back is a slot reusable.
+    drop(held);
+    let answered = (0..50).find_map(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let (status, _) = get(port, "/api/localsend/v2/info");
+        (status == 200).then_some(status)
+    });
+    assert_eq!(answered, Some(200), "the budget never came back");
+
+    stop();
+}

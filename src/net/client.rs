@@ -99,6 +99,23 @@ pub fn prepare_upload(
     serde_json::from_str(&text).map_err(|e| PrepareError::Other(format!("parse response: {e}")))
 }
 
+/// Why an upload didn't land. A status is the peer's own answer and final; a
+/// transport error is the network, and worth one more try.
+#[derive(Debug)]
+pub enum UploadError {
+    Status(u16),
+    Transport(String),
+}
+
+impl std::fmt::Display for UploadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Status(code) => write!(f, "peer answered {code}"),
+            Self::Transport(message) => write!(f, "{message}"),
+        }
+    }
+}
+
 /// Stream one file's bytes. The explicit Content-Length switches ureq to a
 /// sized (non-chunked) body, which every LocalSend receiver expects. `body`
 /// is typically a progress-counting reader that errors out on cancel.
@@ -110,9 +127,13 @@ pub fn upload_file(
     token: &str,
     body: &mut dyn Read,
     size: u64,
-) -> Result<(), String> {
-    let url =
-        format!("{base}{API_PREFIX}/upload?sessionId={session_id}&fileId={file_id}&token={token}");
+) -> Result<(), UploadError> {
+    let url = format!(
+        "{base}{API_PREFIX}/upload?sessionId={}&fileId={}&token={}",
+        escaped(session_id),
+        escaped(file_id),
+        escaped(token)
+    );
     agent
         .post(url)
         .header("Content-Length", size.to_string())
@@ -120,15 +141,33 @@ pub fn upload_file(
         .send(ureq::SendBody::from_reader(body))
         .map(|_| ())
         .map_err(|e| match e {
-            ureq::Error::StatusCode(code) => format!("peer answered {code}"),
-            e => e.to_string(),
+            ureq::Error::StatusCode(code) => UploadError::Status(code),
+            e => UploadError::Transport(e.to_string()),
         })
+}
+
+/// One query-string value, escaped. The session id is the peer's to choose, so
+/// an `&` or a `#` in it would otherwise reshape our own request.
+fn escaped(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(byte as char)
+            }
+            b => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 /// Best-effort session cancel; failures only get logged — the peer's idle
 /// timeout cleans up regardless.
 pub fn cancel(base: &str, session_id: &str) {
-    let url = format!("{base}{API_PREFIX}/cancel?sessionId={session_id}");
+    let url = format!(
+        "{base}{API_PREFIX}/cancel?sessionId={}",
+        escaped(session_id)
+    );
     if let Err(e) = agent(Some(CANCEL_TIMEOUT)).post(url).send(()) {
         log::debug!("cancel {session_id}: {e}");
     }
@@ -139,4 +178,24 @@ fn rest_info(me: &DeviceInfo) -> DeviceInfo {
     let mut info = me.clone();
     info.announce = None;
     info
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A session id comes from the peer. Anything that would end the value —
+    /// or the request line — has to travel as an escape.
+    #[test]
+    fn a_query_value_carries_no_syntax_of_its_own() {
+        assert_eq!(escaped("a1b2c3d4"), "a1b2c3d4");
+        assert_eq!(escaped("keep-._~"), "keep-._~");
+        assert_eq!(escaped("x&fileId=y"), "x%26fileId%3Dy");
+        assert_eq!(escaped("frag#ment"), "frag%23ment");
+        assert_eq!(escaped("a b"), "a%20b");
+        assert_eq!(escaped("plus+"), "plus%2B");
+        assert_eq!(escaped("line\r\n"), "line%0D%0A");
+        // Non-ASCII travels as its UTF-8 bytes.
+        assert_eq!(escaped("ы"), "%D1%8B");
+    }
 }

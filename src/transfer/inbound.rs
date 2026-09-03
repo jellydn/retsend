@@ -78,7 +78,9 @@ impl InboundSession {
             // Belt and braces on top of sanitize: never outside its dir.
             assert_eq!(dest.parent(), Some(dir.as_path()));
             taken.insert(dest.clone());
-            total += meta.size;
+            // Saturating: the sizes are a sender's to claim, and a total
+            // that wrapped would drive the progress bar backwards.
+            total = total.saturating_add(meta.size);
             by_id.insert(meta.id.clone(), slots.len());
             slots.push(FileSlot {
                 token: protocol::random_token(16),
