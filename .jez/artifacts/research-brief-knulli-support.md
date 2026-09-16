@@ -91,7 +91,9 @@ Shared A133 hardware is not compatibility proof. Treat the device, Knulli versio
 
 ## Licensing and Supply Chain
 
-RetSend declares GPL-3.0 and identifies `mxmgorin` as its upstream author in `Cargo.toml`. The declared dependency set includes system SDL2 and Rust crates. The following remains incomplete and blocks redistribution:
+RetSend declares GPL-3.0 and identifies `mxmgorin` as its upstream author in `Cargo.toml`. The declared dependency set includes system SDL2 and Rust crates. The following must be demonstrated before Knulli redistribution:
+
+The `libEGL.so` provenance concern found in other handheld bundle paths does not apply to the inspected generic ARM64 asset, which contains only `retsend`. It becomes a Knulli blocker only if a future Knulli bundle reuses or adds that library.
 
 1. Produce an exact corresponding-source offer/archive for the reviewed commit and every bundled or modified native component.
 2. Include the GPL text and all applicable third-party notices in the Knulli package/release materials.
