@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A way out that no single button names: hold Select and press Y.** Select
+  alone still refreshes the radar and Y alone still pins — the chord only fires
+  when Select is already held as Y lands, like the retro hotkey convention. On
+  pads that arrive as key presses (the Miyoo) the same two keys carry it, and
+  on the desktop keyboard it is Tab (or F5) plus Y. The About screen carries
+  the hint.
+
 ## [0.9.0] - 2026-09-03
 
 ### Added
