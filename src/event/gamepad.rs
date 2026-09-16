@@ -1,7 +1,7 @@
 //! Controller input → [`AppCommand`]s. A trimmed-down take on retsurf's
-//! gesture resolver: taps dispatch on press, and held directions (D-pad or
-//! left stick past the dead zone) auto-repeat navigation. The tap/hold/chord
-//! machinery and bindings.toml arrive with the settings milestone.
+//! gesture resolver: taps dispatch on press, held directions (D-pad or left
+//! stick past the dead zone) auto-repeat navigation, and a held Select turns
+//! Y into the quit chord — the same one the keyboard path offers.
 
 use crate::app::{AppCommand, Direction};
 use crate::config::InputConfig;
@@ -15,6 +15,8 @@ pub struct Gamepad {
     /// Left-stick state folded into digital directions with hysteresis.
     stick: (f32, f32),
     stick_dir: Option<Direction>,
+    /// Select is held (the Select+Y chord's anchor).
+    select_held: bool,
 }
 
 struct Held {
@@ -30,6 +32,7 @@ impl Gamepad {
             held: None,
             stick: (0.0, 0.0),
             stick_dir: None,
+            select_held: false,
         }
     }
 
@@ -54,6 +57,15 @@ impl Gamepad {
             }
             return;
         }
+        // Select anchors the quit chord, so its releases matter too: held, it
+        // turns Y into the app's way out; alone it stays the radar's refresh.
+        if button == Button::Back {
+            self.select_held = pressed;
+            if pressed {
+                commands.push(AppCommand::ReAnnounce);
+            }
+            return;
+        }
         if !pressed {
             return;
         }
@@ -61,9 +73,9 @@ impl Gamepad {
             Button::A => commands.push(AppCommand::Confirm),
             Button::B => commands.push(AppCommand::Back),
             Button::X => commands.push(AppCommand::Alt),
+            Button::Y if self.select_held => commands.push(AppCommand::Shutdown),
             Button::Y => commands.push(AppCommand::TogglePin),
             Button::Start => commands.push(AppCommand::Start),
-            Button::Back => commands.push(AppCommand::ReAnnounce),
             Button::LeftShoulder => commands.push(AppCommand::PageUp),
             Button::RightShoulder => commands.push(AppCommand::PageDown),
             _ => {}
@@ -146,5 +158,39 @@ fn dpad_dir(button: Button) -> Option<Direction> {
         Button::DPadLeft => Some(Direction::Left),
         Button::DPadRight => Some(Direction::Right),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn select_held_turns_y_into_the_quit_chord() {
+        let mut pad = Gamepad::new(InputConfig::default());
+        let mut commands = Vec::new();
+        pad.on_button(Button::Back, true, &mut commands);
+        pad.on_button(Button::Y, true, &mut commands);
+        assert_eq!(commands, vec![AppCommand::ReAnnounce, AppCommand::Shutdown]);
+    }
+
+    #[test]
+    fn releasing_select_hands_y_back_to_pinning() {
+        let mut pad = Gamepad::new(InputConfig::default());
+        let mut commands = Vec::new();
+        pad.on_button(Button::Back, true, &mut commands);
+        pad.on_button(Button::Back, false, &mut commands);
+        pad.on_button(Button::Y, true, &mut commands);
+        assert_eq!(commands, vec![AppCommand::ReAnnounce, AppCommand::TogglePin]);
+    }
+
+    /// Y pressed first keeps its own action; the later Select stays a refresh.
+    #[test]
+    fn y_first_then_select_does_not_quit() {
+        let mut pad = Gamepad::new(InputConfig::default());
+        let mut commands = Vec::new();
+        pad.on_button(Button::Y, true, &mut commands);
+        pad.on_button(Button::Back, true, &mut commands);
+        assert_eq!(commands, vec![AppCommand::TogglePin, AppCommand::ReAnnounce]);
     }
 }
