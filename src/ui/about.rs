@@ -23,7 +23,16 @@ pub fn render(root: &mut egui::Ui, taps: &mut Vec<AppCommand>) {
 
     egui::Panel::bottom(super::BOTTOM_PANEL_ID).show(root, |ui| {
         ui.add_space(4.0);
-        super::home::hint_bar(ui, &[("B", "Back", Some(AppCommand::Back))], taps);
+        // The quit chord is not on every footer, so the one screen that lists
+        // build facts also tells how to leave.
+        super::home::hint_bar(
+            ui,
+            &[
+                ("Select+Y", "Quit", Some(AppCommand::Shutdown)),
+                ("B", "Back", Some(AppCommand::Back)),
+            ],
+            taps,
+        );
         ui.add_space(4.0);
     });
 
