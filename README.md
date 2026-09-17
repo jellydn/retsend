@@ -141,6 +141,7 @@ hint along the bottom to press the button it names.
 | B            | Esc        | Back · decline · cancel · leave the keyboard  |
 | X            | X / Bksp   | Add a device by IP · pick where an incoming transfer lands · delete a history row · erase a character · take the folder under the cursor, or every file in the folder |
 | Y            | Y          | Pin / unpin the row under the cursor          |
+| Select + Y (hold Select) | Tab/F5 + Y | Quit the app                       |
 | Start        | F1         | Confirm send · OK (keyboard)                  |
 | Select       | Tab / F5   | Refresh radar · switch roots · layer (keyboard)|
 | L1 / R1      | PgUp / PgDn| Switch tabs · page the file browser           |

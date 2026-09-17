@@ -21,6 +21,8 @@ pub struct AppEventHandler {
     gamepad: Gamepad,
     /// Which keys the device's pad sends, when it sends keys at all.
     keymap: Keymap,
+    /// Held Select, for the Select+Y quit chord on the keyboard path.
+    chord: keyboard::Chord,
 }
 
 impl AppEventHandler {
@@ -46,6 +48,7 @@ impl AppEventHandler {
             game_controller_subsystem,
             gamepad: Gamepad::new(input_cfg),
             keymap,
+            chord: keyboard::Chord::default(),
         })
     }
 
@@ -110,7 +113,11 @@ impl AppEventHandler {
                 keycode: Some(kc),
                 repeat,
                 ..
-            } => keyboard::on_key_down(self.keymap, kc, repeat, commands),
+            } => keyboard::on_key_down(self.keymap, kc, repeat, &mut self.chord, commands),
+            // Releases only end the keyboard's Select+Y chord.
+            Event::KeyUp {
+                keycode: Some(kc), ..
+            } => keyboard::on_key_up(self.keymap, kc, &mut self.chord),
             Event::Quit { .. } => commands.push(AppCommand::Shutdown),
             // User events exist purely to unblock the wait; per-frame reads of
             // the shared net state pick up whatever changed.
