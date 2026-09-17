@@ -151,9 +151,27 @@ mod tests {
     fn x_and_backspace_erase_while_escape_backs_out() {
         let mut chord = Chord::default();
         let mut commands = Vec::new();
-        on_key_down(Keymap::Desktop, Keycode::X, false, &mut chord, &mut commands);
-        on_key_down(Keymap::Desktop, Keycode::Backspace, false, &mut chord, &mut commands);
-        on_key_down(Keymap::Desktop, Keycode::Escape, false, &mut chord, &mut commands);
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::X,
+            false,
+            &mut chord,
+            &mut commands,
+        );
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Backspace,
+            false,
+            &mut chord,
+            &mut commands,
+        );
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Escape,
+            false,
+            &mut chord,
+            &mut commands,
+        );
         assert_eq!(
             commands,
             vec![AppCommand::Alt, AppCommand::Alt, AppCommand::Back]
@@ -164,7 +182,13 @@ mod tests {
     fn y_pins_and_does_not_repeat() {
         let mut chord = Chord::default();
         let mut commands = Vec::new();
-        on_key_down(Keymap::Desktop, Keycode::Y, false, &mut chord, &mut commands);
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Y,
+            false,
+            &mut chord,
+            &mut commands,
+        );
         assert_eq!(commands, vec![AppCommand::TogglePin]);
 
         // Holding it must not toggle over and over.
@@ -178,8 +202,20 @@ mod tests {
         // Desktop: Select is Tab (or F5), Y is Y.
         let mut chord = Chord::default();
         let mut commands = Vec::new();
-        on_key_down(Keymap::Desktop, Keycode::Tab, false, &mut chord, &mut commands);
-        on_key_down(Keymap::Desktop, Keycode::Y, false, &mut chord, &mut commands);
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Tab,
+            false,
+            &mut chord,
+            &mut commands,
+        );
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Y,
+            false,
+            &mut chord,
+            &mut commands,
+        );
         assert_eq!(commands, vec![AppCommand::ReAnnounce, AppCommand::Shutdown]);
 
         // The Miyoo pad: Select is RCtrl, Y is LAlt.
@@ -195,10 +231,25 @@ mod tests {
     fn releasing_select_hands_y_back_to_pinning() {
         let mut chord = Chord::default();
         let mut commands = Vec::new();
-        on_key_down(Keymap::Desktop, Keycode::F5, false, &mut chord, &mut commands);
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::F5,
+            false,
+            &mut chord,
+            &mut commands,
+        );
         on_key_up(Keymap::Desktop, Keycode::F5, &mut chord);
-        on_key_down(Keymap::Desktop, Keycode::Y, false, &mut chord, &mut commands);
-        assert_eq!(commands, vec![AppCommand::ReAnnounce, AppCommand::TogglePin]);
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Y,
+            false,
+            &mut chord,
+            &mut commands,
+        );
+        assert_eq!(
+            commands,
+            vec![AppCommand::ReAnnounce, AppCommand::TogglePin]
+        );
     }
 
     /// The chord fires on Y's press: Y held first keeps pinning, and a later
@@ -207,10 +258,25 @@ mod tests {
     fn y_first_then_select_does_not_quit() {
         let mut chord = Chord::default();
         let mut commands = Vec::new();
-        on_key_down(Keymap::Desktop, Keycode::Y, false, &mut chord, &mut commands);
-        on_key_down(Keymap::Desktop, Keycode::Tab, false, &mut chord, &mut commands);
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Y,
+            false,
+            &mut chord,
+            &mut commands,
+        );
+        on_key_down(
+            Keymap::Desktop,
+            Keycode::Tab,
+            false,
+            &mut chord,
+            &mut commands,
+        );
         on_key_up(Keymap::Desktop, Keycode::Tab, &mut chord);
-        assert_eq!(commands, vec![AppCommand::TogglePin, AppCommand::ReAnnounce]);
+        assert_eq!(
+            commands,
+            vec![AppCommand::TogglePin, AppCommand::ReAnnounce]
+        );
     }
 
     #[test]

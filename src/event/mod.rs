@@ -116,8 +116,7 @@ impl AppEventHandler {
             } => keyboard::on_key_down(self.keymap, kc, repeat, &mut self.chord, commands),
             // Releases only end the keyboard's Select+Y chord.
             Event::KeyUp {
-                keycode: Some(kc),
-                ..
+                keycode: Some(kc), ..
             } => keyboard::on_key_up(self.keymap, kc, &mut self.chord),
             Event::Quit { .. } => commands.push(AppCommand::Shutdown),
             // User events exist purely to unblock the wait; per-frame reads of

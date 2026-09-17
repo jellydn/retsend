@@ -181,7 +181,10 @@ mod tests {
         pad.on_button(Button::Back, true, &mut commands);
         pad.on_button(Button::Back, false, &mut commands);
         pad.on_button(Button::Y, true, &mut commands);
-        assert_eq!(commands, vec![AppCommand::ReAnnounce, AppCommand::TogglePin]);
+        assert_eq!(
+            commands,
+            vec![AppCommand::ReAnnounce, AppCommand::TogglePin]
+        );
     }
 
     /// Y pressed first keeps its own action; the later Select stays a refresh.
@@ -191,6 +194,9 @@ mod tests {
         let mut commands = Vec::new();
         pad.on_button(Button::Y, true, &mut commands);
         pad.on_button(Button::Back, true, &mut commands);
-        assert_eq!(commands, vec![AppCommand::TogglePin, AppCommand::ReAnnounce]);
+        assert_eq!(
+            commands,
+            vec![AppCommand::TogglePin, AppCommand::ReAnnounce]
+        );
     }
 }
